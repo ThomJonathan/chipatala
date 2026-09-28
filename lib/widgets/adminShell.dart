@@ -4,32 +4,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ============================================================================
 // ADMIN SHELL — one self-contained file: the admin navigation UI.
-//   - phone widths  -> floating bottom nav bar
-//   - desktop widths -> fixed side nav rail
-// Desktop side nav: Home, Inventory, Branches, Users, Reports, Settings.
-// Phone bottom bar: Home, Inventory, Reports, Settings — Branches and Users
-// are reached from the Settings page on phones.
-//
-// HOW TO WIRE THIS IN:
-//   1. Drop this file at lib/widgets/admin_shell.dart
-//   2. In main.dart:
-//        import './widgets/admin_shell.dart';
-//        ...
-//        '/admin-home': (context) => AdminShell(
-//              pages: [
-//                AdminHomeScreen(),
-//                InventoryScreen(),
-//                BranchesScreen(),
-//                UsersScreen(),
-//                ReportsScreen(),
-//                AdminSettingsScreen(userName: currentUser.fullName),
-//              ],
-//              userName: currentUser.fullName,
-//            ),
-//   3. Sign-out needs no wiring — tapping it (icon on mobile, user card on
-//      desktop) confirms, then signs out of Supabase directly and returns
-//      to '/login'. Pass onSignOut only if you want it routed through
-//      AuthRepository instead.
+//   - phone widths  -> floating bottom nav bar (all 6 screens)
+//   - desktop widths -> fixed side nav rail (all 6 screens)
+// Screens: Home, Inventory, Branches, Users, Reports, Settings.
+// Navigation bar is always visible on all screens with the active screen highlighted.
 // ============================================================================
 
 const double _kDesktopBreakpoint = 760;
@@ -50,8 +28,8 @@ class _NavDestination {
   });
 }
 
-// Desktop sidebar: Home, Inventory, Branches, Users, Reports, Settings.
-const List<_NavDestination> _kDesktopDestinations = [
+// All destinations: Home, Inventory, Branches, Users, Reports, Settings.
+const List<_NavDestination> _kDestinations = [
   _NavDestination(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home', pageIndex: 0),
   _NavDestination(icon: Icons.inventory_outlined, activeIcon: Icons.inventory, label: 'Inventory', pageIndex: 1),
   _NavDestination(icon: Icons.storefront_outlined, activeIcon: Icons.storefront, label: 'Branches', pageIndex: 2),
@@ -60,15 +38,24 @@ const List<_NavDestination> _kDesktopDestinations = [
   _NavDestination(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings', pageIndex: 5),
 ];
 
-// Phone bottom bar: Home, Inventory, Reports, Settings. Branches and Users
-// live inside Settings on phones.
-const int _kSettingsPageIndex = 5;
-const List<_NavDestination> _kMobileDestinations = [
-  _NavDestination(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home', pageIndex: 0),
-  _NavDestination(icon: Icons.inventory_outlined, activeIcon: Icons.inventory, label: 'Inventory', pageIndex: 1),
-  _NavDestination(icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart, label: 'Reports', pageIndex: 4),
-  _NavDestination(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings', pageIndex: 5),
-];
+class AdminShellScope extends InheritedWidget {
+  final int selectedIndex;
+  final ValueChanged<int> selectTab;
+
+  const AdminShellScope({
+    super.key,
+    required this.selectedIndex,
+    required this.selectTab,
+    required super.child,
+  });
+
+  static AdminShellScope? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AdminShellScope>();
+
+  @override
+  bool updateShouldNotify(AdminShellScope oldWidget) =>
+      selectedIndex != oldWidget.selectedIndex;
+}
 
 Future<void> _confirmAndSignOut(BuildContext context, VoidCallback? onSignOut) async {
   final confirmed = await showDialog<bool>(
@@ -96,23 +83,31 @@ Future<void> _confirmAndSignOut(BuildContext context, VoidCallback? onSignOut) a
 }
 
 class AdminShell extends StatefulWidget {
-  /// Your six real screens, same order as the desktop nav: Home, Inventory,
+  /// Your six real screens, same order as the nav: Home, Inventory,
   /// Branches, Users, Reports, Settings.
   final List<Widget> pages;
 
   final String userName;
   final VoidCallback? onSignOut;
 
-  AdminShell({
+  const AdminShell({
     super.key,
     required this.pages,
     this.userName = '',
     this.onSignOut,
   }) : assert(
-  pages.length == _kDesktopDestinations.length,
-  'AdminShell.pages must have exactly ${_kDesktopDestinations.length} entries '
+  pages.length == _kDestinations.length,
+  'AdminShell.pages must have exactly ${_kDestinations.length} entries '
       '(Home, Inventory, Branches, Users, Reports, Settings) — got ${pages.length}.',
   );
+
+  static void switchTo(BuildContext context, int index) {
+    final scope = context.findAncestorWidgetOfExactType<AdminShellScope>() ??
+        context.dependOnInheritedWidgetOfExactType<AdminShellScope>();
+    if (scope != null) {
+      scope.selectTab(index);
+    }
+  }
 
   @override
   State<AdminShell> createState() => _AdminShellState();
@@ -125,50 +120,49 @@ class _AdminShellState extends State<AdminShell> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isDesktop = constraints.maxWidth >= _kDesktopBreakpoint;
+    return AdminShellScope(
+      selectedIndex: _index,
+      selectTab: _onSelect,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isDesktop = constraints.maxWidth >= _kDesktopBreakpoint;
 
-        if (isDesktop) {
+          if (isDesktop) {
+            return Scaffold(
+              body: Row(
+                children: [
+                  _SideNav(
+                    selectedIndex: _index,
+                    onSelect: _onSelect,
+                    userName: widget.userName,
+                    onSignOut: widget.onSignOut,
+                  ),
+                  const VerticalDivider(width: 1, thickness: 1, color: _kBorder),
+                  Expanded(
+                    child: IndexedStack(index: _index, children: widget.pages),
+                  ),
+                ],
+              ),
+            );
+          }
+
           return Scaffold(
-            body: Row(
-              children: [
-                _SideNav(
-                  selectedIndex: _index,
-                  onSelect: _onSelect,
-                  userName: widget.userName,
-                  onSignOut: widget.onSignOut,
-                ),
-                const VerticalDivider(width: 1, thickness: 1, color: _kBorder),
-                Expanded(
-                  child: IndexedStack(index: _index, children: widget.pages),
-                ),
-              ],
+            body: SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  _MobileTopBar(userName: widget.userName, onSignOut: widget.onSignOut),
+                  Expanded(child: IndexedStack(index: _index, children: widget.pages)),
+                ],
+              ),
+            ),
+            bottomNavigationBar: SafeArea(
+              top: false,
+              child: _BottomNav(selectedIndex: _index, onSelect: _onSelect),
             ),
           );
-        }
-
-        // If the window shrank while a desktop-only page (Branches/Users) was
-        // open, fall back to Settings, where those pages are linked on phones.
-        final mobileIndex =
-        _kMobileDestinations.any((d) => d.pageIndex == _index) ? _index : _kSettingsPageIndex;
-
-        return Scaffold(
-          body: SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                _MobileTopBar(userName: widget.userName, onSignOut: widget.onSignOut),
-                Expanded(child: IndexedStack(index: mobileIndex, children: widget.pages)),
-              ],
-            ),
-          ),
-          bottomNavigationBar: SafeArea(
-            top: false,
-            child: _BottomNav(selectedIndex: mobileIndex, onSelect: _onSelect),
-          ),
-        );
-      },
+        },
+      ),
     );
   }
 }
@@ -188,17 +182,24 @@ class _BottomNav extends StatelessWidget {
     final primary = Theme.of(context).colorScheme.primary;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: _kBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: _kMobileDestinations.map((d) {
+          children: _kDestinations.map((d) {
             final active = d.pageIndex == selectedIndex;
             final color = active ? primary : _kInkMuted;
             return Expanded(
@@ -211,12 +212,14 @@ class _BottomNav extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(active ? d.activeIcon : d.icon, size: 20, color: color),
-                      const SizedBox(height: 3),
+                      const SizedBox(height: 2),
                       Text(
                         d.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: GoogleFonts.ibmPlexSans(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w500,
+                          fontSize: 10,
+                          fontWeight: active ? FontWeight.w600 : FontWeight.w500,
                           color: color,
                         ),
                       ),
@@ -329,7 +332,7 @@ class _SideNav extends StatelessWidget {
               style: GoogleFonts.ibmPlexSans(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.3),
             ),
           ),
-          ..._kDesktopDestinations.map((d) {
+          ..._kDestinations.map((d) {
             final active = d.pageIndex == selectedIndex;
             return Padding(
               padding: const EdgeInsets.only(bottom: 2),

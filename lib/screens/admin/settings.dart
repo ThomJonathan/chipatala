@@ -1,22 +1,36 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/adminShell.dart';
 import 'adminui.dart';
 import 'branch.dart';
 import 'user.dart';
 
 // ============================================================================
 // ADMIN SETTINGS
-//   Phones: this is where Branches and Users live (the bottom bar only has
-//   Home, Inventory, Reports, Settings). Each row pushes the full screen.
-//   Desktop: same page, harmless duplicate of the sidebar links.
+//   Management links switch active tab in the shell so the navigation bar
+//   stays visible across all screens with the active screen highlighted.
 // ============================================================================
 
 class AdminSettingsScreen extends StatelessWidget {
   final String userName;
   const AdminSettingsScreen({super.key, this.userName = ''});
 
-  void _open(BuildContext context, Widget page) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+  void _openBranches(BuildContext context) {
+    final scope = AdminShellScope.of(context);
+    if (scope != null) {
+      scope.selectTab(2);
+    } else {
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const BranchesScreen(embedded: false)));
+    }
+  }
+
+  void _openUsers(BuildContext context) {
+    final scope = AdminShellScope.of(context);
+    if (scope != null) {
+      scope.selectTab(3);
+    } else {
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => const UsersScreen(embedded: false)));
+    }
   }
 
   @override
@@ -56,13 +70,13 @@ class AdminSettingsScreen extends StatelessWidget {
                               title: 'Branches',
                               subtitle: 'Add shops, edit details, deactivate or delete',
                               showDivider: true,
-                              onTap: () => _open(context, const BranchesScreen(embedded: false)),
+                              onTap: () => _openBranches(context),
                             ),
                             _SettingsTile(
                               icon: Icons.people_outline,
                               title: 'Users',
                               subtitle: 'Approve sign-ups, assign branches, remove accounts',
-                              onTap: () => _open(context, const UsersScreen(embedded: false)),
+                              onTap: () => _openUsers(context),
                             ),
                           ],
                         ),

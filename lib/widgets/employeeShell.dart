@@ -101,6 +101,25 @@ Future<void> _confirmAndSignOut(BuildContext context, VoidCallback? onSignOut) a
   }
 }
 
+class EmployeeShellScope extends InheritedWidget {
+  final int selectedIndex;
+  final ValueChanged<int> selectTab;
+
+  const EmployeeShellScope({
+    super.key,
+    required this.selectedIndex,
+    required this.selectTab,
+    required super.child,
+  });
+
+  static EmployeeShellScope? of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<EmployeeShellScope>();
+
+  @override
+  bool updateShouldNotify(EmployeeShellScope oldWidget) =>
+      selectedIndex != oldWidget.selectedIndex;
+}
+
 class EmployeeShell extends StatefulWidget {
   /// Your five real screens, in the same order as _kDestinations above
   /// (Home, Sale, Stock, Reports, Settings).
@@ -111,7 +130,7 @@ class EmployeeShell extends StatefulWidget {
   final String branchName;
   final VoidCallback? onSignOut;
 
-  EmployeeShell({
+  const EmployeeShell({
     super.key,
     required this.pages,
     this.userName = '',
@@ -124,6 +143,14 @@ class EmployeeShell extends StatefulWidget {
       '(Home, Sale, Stock, Reports, Settings) — got ${pages.length}.',
   );
 
+  static void switchTo(BuildContext context, int index) {
+    final scope = context.findAncestorWidgetOfExactType<EmployeeShellScope>() ??
+        context.dependOnInheritedWidgetOfExactType<EmployeeShellScope>();
+    if (scope != null) {
+      scope.selectTab(index);
+    }
+  }
+
   @override
   State<EmployeeShell> createState() => _EmployeeShellState();
 }
@@ -135,52 +162,56 @@ class _EmployeeShellState extends State<EmployeeShell> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isDesktop = constraints.maxWidth >= _kDesktopBreakpoint;
+    return EmployeeShellScope(
+      selectedIndex: _index,
+      selectTab: _onSelect,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isDesktop = constraints.maxWidth >= _kDesktopBreakpoint;
 
-        if (isDesktop) {
+          if (isDesktop) {
+            return Scaffold(
+              body: Row(
+                children: [
+                  _SideNav(
+                    selectedIndex: _index,
+                    onSelect: _onSelect,
+                    userName: widget.userName,
+                    userRole: widget.userRole,
+                    branchName: widget.branchName,
+                    onSignOut: widget.onSignOut,
+                  ),
+                  const VerticalDivider(width: 1, thickness: 1, color: _kBorder),
+                  Expanded(
+                    child: IndexedStack(index: _index, children: widget.pages),
+                  ),
+                ],
+              ),
+            );
+          }
+
           return Scaffold(
-            body: Row(
-              children: [
-                _SideNav(
-                  selectedIndex: _index,
-                  onSelect: _onSelect,
-                  userName: widget.userName,
-                  userRole: widget.userRole,
-                  branchName: widget.branchName,
-                  onSignOut: widget.onSignOut,
-                ),
-                const VerticalDivider(width: 1, thickness: 1, color: _kBorder),
-                Expanded(
-                  child: IndexedStack(index: _index, children: widget.pages),
-                ),
-              ],
+            body: SafeArea(
+              bottom: false,
+              child: Column(
+                children: [
+                  _MobileTopBar(
+                    userName: widget.userName,
+                    userRole: widget.userRole,
+                    branchName: widget.branchName,
+                    onSignOut: widget.onSignOut,
+                  ),
+                  Expanded(child: IndexedStack(index: _index, children: widget.pages)),
+                ],
+              ),
+            ),
+            bottomNavigationBar: SafeArea(
+              top: false,
+              child: _BottomNav(selectedIndex: _index, onSelect: _onSelect),
             ),
           );
-        }
-
-        return Scaffold(
-          body: SafeArea(
-            bottom: false,
-            child: Column(
-              children: [
-                _MobileTopBar(
-                  userName: widget.userName,
-                  userRole: widget.userRole,
-                  branchName: widget.branchName,
-                  onSignOut: widget.onSignOut,
-                ),
-                Expanded(child: IndexedStack(index: _index, children: widget.pages)),
-              ],
-            ),
-          ),
-          bottomNavigationBar: SafeArea(
-            top: false,
-            child: _BottomNav(selectedIndex: _index, onSelect: _onSelect),
-          ),
-        );
-      },
+        },
+      ),
     );
   }
 }

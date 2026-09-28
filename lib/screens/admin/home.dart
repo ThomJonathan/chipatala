@@ -5,6 +5,7 @@ import '../../appUser.dart';
 import '../../auth-repository.dart';
 import '../../widgets/adminShell.dart';
 import 'adminhomeRepo.dart';
+import 'adminui.dart';
 import 'branch.dart';
 import 'settings.dart';
 import 'user.dart';
@@ -412,7 +413,14 @@ class _DesktopLayout extends StatelessWidget {
 }
 
 void _openAttentionPage(BuildContext context, List<AttentionItem> items) {
-  Navigator.of(context).push(MaterialPageRoute(builder: (_) => AttentionDetailScreen(items: items)));
+  showAdaptiveSheet(
+    context,
+    builder: (_) => SheetFrame(
+      title: 'Needs attention',
+      subtitle: '${items.length} ${items.length == 1 ? 'item' : 'items'} requiring action',
+      child: AttentionDetailContent(items: items),
+    ),
+  );
 }
 
 // ============================================================================
@@ -628,8 +636,65 @@ class _AttentionRow extends StatelessWidget {
 }
 
 // ============================================================================
-// ATTENTION DETAIL PAGE
+// ATTENTION DETAIL (ADAPTIVE SHEET & DETAIL PAGE)
 // ============================================================================
+
+class AttentionDetailContent extends StatefulWidget {
+  final List<AttentionItem> items;
+  const AttentionDetailContent({super.key, required this.items});
+
+  @override
+  State<AttentionDetailContent> createState() => _AttentionDetailContentState();
+}
+
+class _AttentionDetailContentState extends State<AttentionDetailContent> {
+  AttentionType? _filter;
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filter == null ? widget.items : widget.items.where((i) => i.type == _filter).toList();
+    final lowCount = widget.items.where((i) => i.type == AttentionType.lowStock).length;
+    final expCount = widget.items.where((i) => i.type == AttentionType.expiring).length;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _FilterChip(label: 'All (${widget.items.length})', selected: _filter == null, onTap: () => setState(() => _filter = null)),
+              const SizedBox(width: 8),
+              _FilterChip(label: 'Low stock ($lowCount)', selected: _filter == AttentionType.lowStock, onTap: () => setState(() => _filter = AttentionType.lowStock)),
+              const SizedBox(width: 8),
+              _FilterChip(label: 'Expiring ($expCount)', selected: _filter == AttentionType.expiring, onTap: () => setState(() => _filter = AttentionType.expiring)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+        if (filtered.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: Text('Nothing here.', style: _sans(13.5, color: _kInkMuted))),
+          )
+        else
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 420),
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: filtered.length,
+              separatorBuilder: (ctx, index) => const Divider(height: 1, color: _kBorder),
+              itemBuilder: (context, i) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: _AttentionRow(item: filtered[i]),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
 
 class AttentionDetailScreen extends StatefulWidget {
   final List<AttentionItem> items;
@@ -640,14 +705,8 @@ class AttentionDetailScreen extends StatefulWidget {
 }
 
 class _AttentionDetailScreenState extends State<AttentionDetailScreen> {
-  AttentionType? _filter;
-
   @override
   Widget build(BuildContext context) {
-    final filtered = _filter == null ? widget.items : widget.items.where((i) => i.type == _filter).toList();
-    final lowCount = widget.items.where((i) => i.type == AttentionType.lowStock).length;
-    final expCount = widget.items.where((i) => i.type == AttentionType.expiring).length;
-
     return Scaffold(
       backgroundColor: _kBg,
       appBar: AppBar(
@@ -658,35 +717,9 @@ class _AttentionDetailScreenState extends State<AttentionDetailScreen> {
         title: Text('Needs attention', style: _sans(16, weight: FontWeight.w700, color: _kInk)),
       ),
       body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 12, 18, 4),
-              child: Row(
-                children: [
-                  _FilterChip(label: 'All (${widget.items.length})', selected: _filter == null, onTap: () => setState(() => _filter = null)),
-                  const SizedBox(width: 8),
-                  _FilterChip(label: 'Low stock ($lowCount)', selected: _filter == AttentionType.lowStock, onTap: () => setState(() => _filter = AttentionType.lowStock)),
-                  const SizedBox(width: 8),
-                  _FilterChip(label: 'Expiring ($expCount)', selected: _filter == AttentionType.expiring, onTap: () => setState(() => _filter = AttentionType.expiring)),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: filtered.isEmpty
-                  ? Center(child: Text('Nothing here.', style: _sans(13.5, color: _kInkMuted)))
-                  : ListView.separated(
-                padding: const EdgeInsets.fromLTRB(18, 4, 18, 18),
-                itemCount: filtered.length,
-                separatorBuilder: (_, __) => const Divider(height: 1, color: _kBorder),
-                itemBuilder: (context, i) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: _AttentionRow(item: filtered[i]),
-                ),
-              ),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: AttentionDetailContent(items: widget.items),
         ),
       ),
     );
