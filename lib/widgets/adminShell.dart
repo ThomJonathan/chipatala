@@ -6,8 +6,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // ADMIN SHELL — one self-contained file: the admin navigation UI.
 //   - phone widths  -> floating bottom nav bar
 //   - desktop widths -> fixed side nav rail
-// Destinations: Home, Branches, Users, Reports, Settings — since an admin
-// oversees branches/staff/company numbers rather than ringing up sales.
+// Desktop side nav: Home, Inventory, Branches, Users, Reports, Settings.
+// Phone bottom bar: Home, Inventory, Reports, Settings — Branches and Users
+// are reached from the Settings page on phones.
 //
 // HOW TO WIRE THIS IN:
 //   1. Drop this file at lib/widgets/admin_shell.dart
@@ -15,12 +16,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 //        import './widgets/admin_shell.dart';
 //        ...
 //        '/admin-home': (context) => AdminShell(
-//              pages: const [
-//                AdminHomeScreen(),   // your real screens, in this order
+//              pages: [
+//                AdminHomeScreen(),
+//                InventoryScreen(),
 //                BranchesScreen(),
-//                UsersScreen(),       // staff list + pending approvals
-//                ReportsScreen(),     // company-wide, across branches
-//                SettingsScreen(),
+//                UsersScreen(),
+//                ReportsScreen(),
+//                AdminSettingsScreen(userName: currentUser.fullName),
 //              ],
 //              userName: currentUser.fullName,
 //            ),
@@ -48,21 +50,24 @@ class _NavDestination {
   });
 }
 
-// Home, Inventory, Users, Reports, Settings — in this order for desktop sidebar.
+// Desktop sidebar: Home, Inventory, Branches, Users, Reports, Settings.
 const List<_NavDestination> _kDesktopDestinations = [
   _NavDestination(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home', pageIndex: 0),
   _NavDestination(icon: Icons.inventory_outlined, activeIcon: Icons.inventory, label: 'Inventory', pageIndex: 1),
-  _NavDestination(icon: Icons.people_outline, activeIcon: Icons.people, label: 'Users', pageIndex: 2),
-  _NavDestination(icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart, label: 'Reports', pageIndex: 3),
-  _NavDestination(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings', pageIndex: 4),
+  _NavDestination(icon: Icons.storefront_outlined, activeIcon: Icons.storefront, label: 'Branches', pageIndex: 2),
+  _NavDestination(icon: Icons.people_outline, activeIcon: Icons.people, label: 'Users', pageIndex: 3),
+  _NavDestination(icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart, label: 'Reports', pageIndex: 4),
+  _NavDestination(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings', pageIndex: 5),
 ];
 
-// Mobile bottom bar destinations: Home, Inventory, Reports, Settings (Users omitted for mobile nav bar).
+// Phone bottom bar: Home, Inventory, Reports, Settings. Branches and Users
+// live inside Settings on phones.
+const int _kSettingsPageIndex = 5;
 const List<_NavDestination> _kMobileDestinations = [
   _NavDestination(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home', pageIndex: 0),
   _NavDestination(icon: Icons.inventory_outlined, activeIcon: Icons.inventory, label: 'Inventory', pageIndex: 1),
-  _NavDestination(icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart, label: 'Reports', pageIndex: 3),
-  _NavDestination(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings', pageIndex: 4),
+  _NavDestination(icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart, label: 'Reports', pageIndex: 4),
+  _NavDestination(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings', pageIndex: 5),
 ];
 
 Future<void> _confirmAndSignOut(BuildContext context, VoidCallback? onSignOut) async {
@@ -91,8 +96,8 @@ Future<void> _confirmAndSignOut(BuildContext context, VoidCallback? onSignOut) a
 }
 
 class AdminShell extends StatefulWidget {
-  /// Your five real screens, same order as the nav: Home, Branches, Users,
-  /// Reports, Settings.
+  /// Your six real screens, same order as the desktop nav: Home, Inventory,
+  /// Branches, Users, Reports, Settings.
   final List<Widget> pages;
 
   final String userName;
@@ -106,7 +111,7 @@ class AdminShell extends StatefulWidget {
   }) : assert(
   pages.length == _kDesktopDestinations.length,
   'AdminShell.pages must have exactly ${_kDesktopDestinations.length} entries '
-      '(Home, Inventory, Users, Reports, Settings) — got ${pages.length}.',
+      '(Home, Inventory, Branches, Users, Reports, Settings) — got ${pages.length}.',
   );
 
   @override
@@ -143,19 +148,24 @@ class _AdminShellState extends State<AdminShell> {
           );
         }
 
+        // If the window shrank while a desktop-only page (Branches/Users) was
+        // open, fall back to Settings, where those pages are linked on phones.
+        final mobileIndex =
+        _kMobileDestinations.any((d) => d.pageIndex == _index) ? _index : _kSettingsPageIndex;
+
         return Scaffold(
           body: SafeArea(
             bottom: false,
             child: Column(
               children: [
                 _MobileTopBar(userName: widget.userName, onSignOut: widget.onSignOut),
-                Expanded(child: IndexedStack(index: _index, children: widget.pages)),
+                Expanded(child: IndexedStack(index: mobileIndex, children: widget.pages)),
               ],
             ),
           ),
           bottomNavigationBar: SafeArea(
             top: false,
-            child: _BottomNav(selectedIndex: _index, onSelect: _onSelect),
+            child: _BottomNav(selectedIndex: mobileIndex, onSelect: _onSelect),
           ),
         );
       },

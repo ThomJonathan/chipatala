@@ -5,6 +5,9 @@ import '../../appUser.dart';
 import '../../auth-repository.dart';
 import '../../widgets/adminShell.dart';
 import 'adminhomeRepo.dart';
+import 'branch.dart';
+import 'settings.dart';
+import 'user.dart';
 
 /// Top-level route for '/admin-home'.
 /// Loads the signed-in [AppUser] and wraps [AdminHomeScreen] inside [AdminShell].
@@ -45,12 +48,13 @@ class _AdminHomeRouteState extends State<AdminHomeRoute> {
         final user = snapshot.data!;
         return AdminShell(
           userName: user.fullName,
-          pages: const [
-            AdminHomeScreen(),
-            Center(child: Text('Inventory')),
-            Center(child: Text('Users')),
-            Center(child: Text('Reports')),
-            Center(child: Text('Settings')),
+          pages: [
+            const AdminHomeScreen(),
+            const Center(child: Text('Inventory')),
+            const BranchesScreen(embedded: true),
+            const UsersScreen(embedded: true),
+            const Center(child: Text('Reports')),
+            AdminSettingsScreen(userName: user.fullName),
           ],
         );
       },

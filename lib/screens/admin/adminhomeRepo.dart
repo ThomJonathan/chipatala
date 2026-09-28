@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+export 'adminManagementRepo.dart';
+
 // ============================================================================
 // ADMIN HOME — REPOSITORY
 //   Pulls real data from Supabase for the admin dashboard:
