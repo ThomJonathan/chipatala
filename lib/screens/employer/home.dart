@@ -5,6 +5,7 @@ import '../../appUser.dart';
 import '../../auth-repository.dart';
 import '../../widgets/employeeShell.dart';
 import 'employeeHome.dart';
+import 'saleScreen.dart';
 
 /// What '/home' should point to in main.dart, instead of EmployeeHomePage:
 ///
@@ -70,9 +71,7 @@ class _EmployeeHomeRouteState extends State<EmployeeHomeRoute> {
           branchName: data.branchName,
           pages: [
             EmployeeHomeScreen(user: data.user, branchName: data.branchName),
-            // TODO: swap each of these for the real screen as you build it.
-            // Order matches the nav: Home, Sale, Stock, Reports, Settings.
-            const Center(child: Text('New Sale')),
+            SaleScreen(user: data.user, branchName: data.branchName),
             const Center(child: Text('Stock')),
             const Center(child: Text('Reports')),
             const Center(child: Text('Settings')),

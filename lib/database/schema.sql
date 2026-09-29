@@ -1326,3 +1326,264 @@ GRANT EXECUTE ON FUNCTION report_sales_trend(date, date, text, uuid)         TO 
 GRANT EXECUTE ON FUNCTION report_profit_summary(date, date, uuid)            TO authenticated;
 GRANT EXECUTE ON FUNCTION report_best_sellers(date, date, uuid, text, int)   TO authenticated;
 GRANT EXECUTE ON FUNCTION report_expenses_by_category(date, date, uuid)      TO authenticated;
+
+                                                     -- ============================================================================
+-- SALES: trigger fix, create_sale(), get_receipt(), tighter RLS
+-- Run after all earlier migrations.
+-- ============================================================================
+
+-- 1. Trigger fixes -----------------------------------------------------------
+CREATE OR REPLACE FUNCTION fn_apply_credit_sale() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+    IF NEW.customer_id IS NOT NULL AND NEW.payment_method = 'credit' THEN
+UPDATE customers
+SET current_balance = current_balance + (
+    COALESCE(NEW.total_amount, 0)
+        - CASE WHEN TG_OP = 'UPDATE' THEN COALESCE(OLD.total_amount, 0) ELSE 0 END)
+WHERE id = NEW.customer_id;
+END IF;
+RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_apply_credit_sale ON sales;
+CREATE TRIGGER trg_apply_credit_sale
+    AFTER INSERT OR UPDATE OF total_amount ON sales          -- amount_paid removed
+    FOR EACH ROW EXECUTE FUNCTION fn_apply_credit_sale();
+
+CREATE OR REPLACE FUNCTION fn_apply_payment() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+    IF NEW.customer_id IS NOT NULL THEN
+UPDATE customers SET current_balance = current_balance - NEW.amount
+WHERE id = NEW.customer_id;
+END IF;
+
+    IF NEW.sale_id IS NOT NULL THEN
+UPDATE sales
+SET amount_paid = amount_paid + NEW.amount,
+    payment_status = CASE
+                         WHEN amount_paid + NEW.amount >= total_amount THEN 'paid'::payment_status
+                         WHEN amount_paid + NEW.amount > 0            THEN 'partial'::payment_status
+                         ELSE 'pending'::payment_status END
+WHERE id = NEW.sale_id;
+END IF;
+
+    IF NEW.purchase_id IS NOT NULL THEN
+UPDATE purchases SET amount_paid = amount_paid + NEW.amount
+WHERE id = NEW.purchase_id;
+END IF;
+RETURN NEW;
+END;
+$$;
+
+-- 2. Receipt data (used right after a sale, and for reprints) -----------------
+CREATE OR REPLACE FUNCTION get_receipt(p_sale_id uuid) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE r jsonb;
+BEGIN
+SELECT jsonb_build_object(
+               'sale_id',         s.id,
+               'receipt_number',  s.receipt_number,
+               'sale_date',       s.sale_date AT TIME ZONE 'Africa/Blantyre',
+               'branch_name',     b.name,
+               'branch_location', b.location,
+               'branch_phone',    b.phone,
+               'cashier_name',    u.full_name,
+               'customer_name',   c.name,
+               'sale_type',       s.sale_type,
+               'payment_method',  s.payment_method,
+               'payment_status',  s.payment_status,
+               'total_amount',    s.total_amount,
+               'amount_paid',     s.amount_paid,
+               'balance_due',     s.total_amount - s.amount_paid,
+               'items', COALESCE((
+                                     SELECT jsonb_agg(jsonb_build_object(
+                                                              'name', i.name, 'quantity', si.quantity,
+                                                              'unit_price', si.unit_price, 'subtotal', si.subtotal)
+                                                          ORDER BY i.name, si.id)
+                                     FROM sale_items si JOIN items i ON i.id = si.item_id
+                                     WHERE si.sale_id = s.id), '[]'::jsonb)
+       ) INTO r
+FROM sales s
+         JOIN branches b ON b.id = s.branch_id
+         LEFT JOIN users u ON u.id = s.cashier_id
+         LEFT JOIN customers c ON c.id = s.customer_id
+WHERE s.id = p_sale_id
+  AND (is_admin() OR s.branch_id = user_branch_id());   -- same rule as RLS
+
+IF r IS NULL THEN RAISE EXCEPTION 'Receipt not found.'; END IF;
+RETURN r;
+END;
+$$;
+
+-- 3. The sale function --------------------------------------------------------
+CREATE SEQUENCE IF NOT EXISTS receipt_seq;
+
+CREATE OR REPLACE FUNCTION create_sale(
+    p_lines          jsonb,                          -- [{"item_id":"...","quantity":2}, ...]
+    p_sale_type      sale_type      DEFAULT 'retail',
+    p_payment_method payment_method DEFAULT 'cash',
+    p_customer_id    uuid           DEFAULT NULL,    -- required when credit
+    p_amount_paid    numeric        DEFAULT 0,       -- credit only: paid now
+    p_paid_method    payment_method DEFAULT 'cash',  -- how that part-payment was made
+    p_branch_id      uuid           DEFAULT NULL     -- admin only
+) RETURNS jsonb
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+v_uid       uuid := auth.uid();
+    v_today     date := (now() AT TIME ZONE 'Africa/Blantyre')::date;
+    v_role      user_role;
+    v_branch    uuid;
+    v_prefix    text;
+    v_sale_id   uuid;
+    v_line      record;
+    v_batch     record;
+    v_item_name text;
+    v_remaining numeric;
+    v_take      numeric;
+    v_price     numeric;
+    v_total     numeric;
+BEGIN
+    -- who is selling, and where
+SELECT role, branch_id INTO v_role, v_branch FROM users WHERE id = v_uid AND is_active;
+IF v_role IS NULL THEN RAISE EXCEPTION 'Your account is not active.'; END IF;
+    IF v_role = 'admin' THEN
+        v_branch := p_branch_id;
+        IF v_branch IS NULL THEN RAISE EXCEPTION 'Choose a branch to sell from.'; END IF;
+    ELSIF v_role NOT IN ('cashier', 'manager') THEN
+        RAISE EXCEPTION 'Your role cannot record sales.';
+END IF;
+    IF NOT EXISTS (SELECT 1 FROM branches WHERE id = v_branch AND is_active) THEN
+        RAISE EXCEPTION 'Branch not found or inactive.';
+END IF;
+
+    -- basic validation
+    IF p_lines IS NULL OR jsonb_typeof(p_lines) <> 'array' OR jsonb_array_length(p_lines) = 0 THEN
+        RAISE EXCEPTION 'Add at least one item to the sale.';
+END IF;
+    IF p_payment_method = 'credit' AND p_customer_id IS NULL THEN
+        RAISE EXCEPTION 'A customer is required for credit sales.';
+END IF;
+    IF p_customer_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM customers WHERE id = p_customer_id
+           AND (branch_id IS NULL OR branch_id = v_branch)) THEN
+        RAISE EXCEPTION 'Customer not found at this branch.';
+END IF;
+
+    -- receipt number, e.g. MZU-000123
+SELECT upper(left(regexp_replace(name, '[^A-Za-z]', '', 'g'), 3))
+INTO v_prefix FROM branches WHERE id = v_branch;
+INSERT INTO sales (branch_id, customer_id, cashier_id, sale_type, payment_method,
+                   payment_status, receipt_number)
+VALUES (v_branch, p_customer_id, v_uid, p_sale_type, p_payment_method,
+        CASE WHEN p_payment_method = 'credit'
+                 THEN 'pending'::payment_status ELSE 'paid'::payment_status END,
+        COALESCE(NULLIF(v_prefix, ''), 'RCT') || '-' || lpad(nextval('receipt_seq')::text, 6, '0'))
+    RETURNING id INTO v_sale_id;
+
+-- one pass per item, always in item_id order so two sales can't deadlock
+FOR v_line IN
+SELECT (l->>'item_id')::uuid AS item_id, SUM((l->>'quantity')::numeric) AS qty
+FROM jsonb_array_elements(p_lines) AS l
+GROUP BY 1 ORDER BY 1
+    LOOP
+        IF v_line.qty <= 0 THEN RAISE EXCEPTION 'Quantities must be greater than zero.'; END IF;
+
+SELECT name INTO v_item_name FROM items WHERE id = v_line.item_id AND is_active;
+IF v_item_name IS NULL THEN RAISE EXCEPTION 'An item in this sale is missing or discontinued.'; END IF;
+
+        v_remaining := v_line.qty;
+
+        -- first-expiry-first-out; skip expired batches; lock rows so nobody else can sell them
+FOR v_batch IN
+SELECT id, buying_price, retail_price, wholesale_price, quantity_available
+FROM inventory
+WHERE branch_id = v_branch AND item_id = v_line.item_id
+  AND quantity_available > 0
+  AND (expiry_date IS NULL OR expiry_date >= v_today)
+ORDER BY expiry_date ASC NULLS LAST, received_date ASC, created_at ASC
+    FOR UPDATE
+    LOOP
+            EXIT WHEN v_remaining <= 0;
+v_take  := LEAST(v_remaining, v_batch.quantity_available);
+            v_price := CASE WHEN p_sale_type = 'wholesale'
+                            THEN COALESCE(v_batch.wholesale_price, v_batch.retail_price)
+                            ELSE v_batch.retail_price END;
+
+INSERT INTO sale_items (sale_id, item_id, inventory_id, quantity,
+                        unit_price, unit_cost, subtotal)
+VALUES (v_sale_id, v_line.item_id, v_batch.id, v_take,
+        v_price, v_batch.buying_price, v_take * v_price);
+
+UPDATE inventory SET quantity_available = quantity_available - v_take
+WHERE id = v_batch.id;
+
+INSERT INTO stock_movements (branch_id, item_id, inventory_id, movement_type,
+                             quantity, reference_table, reference_id, performed_by)
+VALUES (v_branch, v_line.item_id, v_batch.id, 'sale_out',
+        v_take, 'sales', v_sale_id, v_uid);
+
+v_remaining := v_remaining - v_take;
+END LOOP;
+
+        IF v_remaining > 0 THEN
+            RAISE EXCEPTION 'Not enough stock for %: only % available.',
+                            v_item_name, v_line.qty - v_remaining;   -- rolls back the whole sale
+END IF;
+END LOOP;
+
+    -- payment (total_amount was filled in by the sale_items trigger)
+SELECT total_amount INTO v_total FROM sales WHERE id = v_sale_id;
+
+IF p_payment_method = 'credit' THEN
+        IF COALESCE(p_amount_paid, 0) < 0 OR COALESCE(p_amount_paid, 0) > v_total THEN
+            RAISE EXCEPTION 'Amount paid now must be between 0 and the sale total.';
+END IF;
+        IF COALESCE(p_amount_paid, 0) > 0 THEN
+            IF p_paid_method = 'credit' THEN
+                RAISE EXCEPTION 'Choose how the part-payment was made (cash, mobile money or card).';
+END IF;
+INSERT INTO payments (branch_id, customer_id, sale_id, amount, payment_method,
+                      recorded_by, notes)
+VALUES (v_branch, p_customer_id, v_sale_id, p_amount_paid, p_paid_method,
+        v_uid, 'Part-payment at time of sale');
+END IF;
+ELSE
+UPDATE sales SET amount_paid = total_amount WHERE id = v_sale_id;
+END IF;
+
+RETURN get_receipt(v_sale_id);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION get_receipt(uuid) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION create_sale(jsonb, sale_type, payment_method, uuid, numeric, payment_method, uuid)
+    FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION get_receipt(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION create_sale(jsonb, sale_type, payment_method, uuid, numeric, payment_method, uuid)
+    TO authenticated;
+
+-- 4. RLS -----------------------------------------------------------------------
+-- Sales can only be created through create_sale(), so remove the direct inserts
+-- (otherwise a cashier could insert a sale line with any price and no stock deducted).
+DROP POLICY IF EXISTS "Staff record sales at own branch" ON sales;
+DROP POLICY IF EXISTS "Insert sale_items via parent sale access" ON sale_items;
+
+-- Inventory: cashiers can view stock but no longer change it.
+DROP POLICY IF EXISTS "Admins and staff manage own branch inventory" ON inventory;
+
+CREATE POLICY "Inventory insert: admin, or manager/stock controller at own branch"
+    ON inventory FOR INSERT
+    WITH CHECK (is_admin() OR (branch_id = user_branch_id()
+                               AND user_role_name() IN ('manager', 'stock_controller')));
+
+CREATE POLICY "Inventory update: admin, or manager/stock controller at own branch"
+    ON inventory FOR UPDATE
+                                                                                                                                USING      (is_admin() OR (branch_id = user_branch_id()
+                                                                                                                                AND user_role_name() IN ('manager', 'stock_controller')))
+                     WITH CHECK (is_admin() OR (branch_id = user_branch_id()
+                                                                                                                                AND user_role_name() IN ('manager', 'stock_controller')));
+
+CREATE POLICY "Admins delete inventory" ON inventory FOR DELETE USING (is_admin());
