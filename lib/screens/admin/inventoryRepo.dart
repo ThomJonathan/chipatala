@@ -103,9 +103,6 @@ class ItemStock {
 
   double get stockValue => batches.fold(0, (s, b) => s + b.qtyAvailable * b.buyingPrice);
 
-  double get potentialProfit =>
-      batches.fold(0, (s, b) => s + b.qtyAvailable * (b.retailPrice - b.buyingPrice));
-
   /// "Where it is": branch name -> quantity, largest first.
   List<MapEntry<String, double>> get byBranch {
     final map = <String, double>{};
@@ -119,13 +116,11 @@ class ItemStock {
 
 class InventorySummary {
   final double stockValue;
-  final double potentialProfit;
   final int lowCount;
   final int expiring90;
   final int expired;
   const InventorySummary({
     required this.stockValue,
-    required this.potentialProfit,
     required this.lowCount,
     required this.expiring90,
     required this.expired,
@@ -133,7 +128,6 @@ class InventorySummary {
 
   static const empty = InventorySummary(
     stockValue: 0,
-    potentialProfit: 0,
     lowCount: 0,
     expiring90: 0,
     expired: 0,
@@ -319,13 +313,11 @@ class InventoryRepository {
 
   InventorySummary summarize(List<ItemStock> items) {
     var value = 0.0;
-    var profit = 0.0;
     var low = 0;
     var exp90 = 0;
     var expired = 0;
     for (final item in items) {
       value += item.stockValue;
-      profit += item.potentialProfit;
       if (item.status == StockStatus.low || item.status == StockStatus.out) low++;
       for (final b in item.batches) {
         final d = b.daysToExpiry;
@@ -339,7 +331,6 @@ class InventoryRepository {
     }
     return InventorySummary(
       stockValue: value,
-      potentialProfit: profit,
       lowCount: low,
       expiring90: exp90,
       expired: expired,

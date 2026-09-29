@@ -1,5 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import 'adminui.dart';
 import 'inventoryRepo.dart';
@@ -313,150 +316,123 @@ class _InventoryScreenState extends State<InventoryScreen> {
 
   void _jumpToTab(int tab) => setState(() => _tab = tab);
 
-  // ---- CSV export (no packages needed: preview + copy to clipboard) ---------
+  // ---- CSV export: downloads a .csv file onto the user's device ------------
 
-  void _exportCurrentTab() {
-    final scope = _scopeName;
-    late String name;
-    late String csv;
-    switch (_tab) {
-      case 0:
-        name = 'Stock overview';
-        final buf = StringBuffer('Item,Category,Unit,Branches,Qty on hand,Reorder level,Status,Stock value (MK),Potential profit (MK)\n');
-        for (final it in _visibleItems) {
-          final where = it.byBranch.map((e) => '${e.key} (${_fmtQty(e.value)})').join('; ');
-          buf.writeln([
-            _csvCell(it.itemName),
-            _csvCell(it.category),
-            _csvCell(it.unit),
-            _csvCell(where),
-            _fmtQty(it.qtyOnHand),
-            _fmtQty(it.reorderLevel),
-            it.status.name,
-            it.stockValue.round(),
-            it.potentialProfit.round(),
-          ].join(','));
-        }
-        csv = buf.toString();
-      case 1:
-        name = 'Low stock';
-        final buf = StringBuffer('Item,Branch,Qty on hand,Reorder level\n');
-        for (final r in _low) {
-          buf.writeln([_csvCell(r.itemName), _csvCell(r.branchName), _fmtQty(r.qtyOnHand), _fmtQty(r.reorderLevel)].join(','));
-        }
-        csv = buf.toString();
-      case 2:
-        name = 'Expiry';
-        final buf = StringBuffer('Item,Batch,Branch,Expiry date,Days to expiry,Qty,Value at risk (MK)\n');
-        for (final bucket in _expiryBuckets()) {
-          for (final b in bucket) {
+  bool _exporting = false;
+
+  String _exportFileName(String tab) {
+    final now = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    return 'chipatala_${tab}_${now.year}${two(now.month)}${two(now.day)}_${two(now.hour)}${two(now.minute)}';
+  }
+
+  Future<void> _exportCurrentTab() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      final scope = _scopeName;
+      late String tab;
+      late String csv;
+      switch (_tab) {
+        case 0:
+          tab = 'stock_overview';
+          final buf = StringBuffer('Item,Category,Unit,Branches,Qty on hand,Reorder level,Status,Stock value (MK)\n');
+          for (final it in _visibleItems) {
+            final where = it.byBranch.map((e) => '${e.key} (${_fmtQty(e.value)})').join('; ');
             buf.writeln([
-              _csvCell(b.itemName),
-              _csvCell(b.batchNumber),
-              _csvCell(b.branchName),
-              b.expiryDate ?? '',
-              b.daysToExpiry ?? '',
-              _fmtQty(b.qtyAvailable),
-              (b.qtyAvailable * b.buyingPrice).round(),
+              _csvCell(it.itemName),
+              _csvCell(it.category),
+              _csvCell(it.unit),
+              _csvCell(where),
+              _fmtQty(it.qtyOnHand),
+              _fmtQty(it.reorderLevel),
+              it.status.name,
+              it.stockValue.round(),
             ].join(','));
           }
-        }
-        csv = buf.toString();
-      case 3:
-        name = 'Stock movements';
-        final buf = StringBuffer('Date,Type,Item,Branch,Quantity,Notes\n');
-        for (final m in _visibleMovements) {
-          buf.writeln([
-            _csvCell(m.createdAt),
-            m.type,
-            _csvCell(m.itemName),
-            _csvCell(m.branchName),
-            _fmtQty(m.quantity),
-            _csvCell(m.notes ?? ''),
-          ].join(','));
-        }
-        csv = buf.toString();
-      case 4:
-        name = 'Purchases';
-        final buf = StringBuffer('Date,Invoice,Branch,Supplier,Total (MK),Paid (MK),Balance (MK),Status\n');
-        for (final p in _visiblePurchases) {
-          buf.writeln([
-            p.purchaseDate,
-            _csvCell(p.invoiceNumber),
-            _csvCell(p.branchName),
-            _csvCell(p.supplierName),
-            p.totalAmount.round(),
-            p.amountPaid.round(),
-            p.balance.round(),
-            p.paymentStatus,
-          ].join(','));
-        }
-        csv = buf.toString();
-      default:
-        name = 'Item catalog';
-        final buf = StringBuffer('Name,Category,Unit,Reorder level,Rx,Active\n');
-        for (final c in _visibleCatalog) {
-          buf.writeln([
-            _csvCell(c.name),
-            _csvCell(c.category),
-            _csvCell(c.unit),
-            _fmtQty(c.reorderLevel),
-            c.requiresPrescription ? 'yes' : 'no',
-            c.isActive ? 'yes' : 'no',
-          ].join(','));
-        }
-        csv = buf.toString();
+          csv = buf.toString();
+        case 1:
+          tab = 'low_stock';
+          final buf = StringBuffer('Item,Branch,Qty on hand,Reorder level\n');
+          for (final r in _low) {
+            buf.writeln([_csvCell(r.itemName), _csvCell(r.branchName), _fmtQty(r.qtyOnHand), _fmtQty(r.reorderLevel)].join(','));
+          }
+          csv = buf.toString();
+        case 2:
+          tab = 'expiry';
+          final buf = StringBuffer('Item,Batch,Branch,Expiry date,Days to expiry,Qty,Value at risk (MK)\n');
+          for (final bucket in _expiryBuckets()) {
+            for (final b in bucket) {
+              buf.writeln([
+                _csvCell(b.itemName),
+                _csvCell(b.batchNumber),
+                _csvCell(b.branchName),
+                b.expiryDate ?? '',
+                b.daysToExpiry ?? '',
+                _fmtQty(b.qtyAvailable),
+                (b.qtyAvailable * b.buyingPrice).round(),
+              ].join(','));
+            }
+          }
+          csv = buf.toString();
+        case 3:
+          tab = 'stock_movements';
+          final buf = StringBuffer('Date,Type,Item,Branch,Quantity,Notes\n');
+          for (final m in _visibleMovements) {
+            buf.writeln([
+              _csvCell(m.createdAt),
+              m.type,
+              _csvCell(m.itemName),
+              _csvCell(m.branchName),
+              _fmtQty(m.quantity),
+              _csvCell(m.notes ?? ''),
+            ].join(','));
+          }
+          csv = buf.toString();
+        case 4:
+          tab = 'purchases';
+          final buf = StringBuffer('Date,Invoice,Branch,Supplier,Total (MK),Paid (MK),Balance (MK),Status\n');
+          for (final p in _visiblePurchases) {
+            buf.writeln([
+              p.purchaseDate,
+              _csvCell(p.invoiceNumber),
+              _csvCell(p.branchName),
+              _csvCell(p.supplierName),
+              p.totalAmount.round(),
+              p.amountPaid.round(),
+              p.balance.round(),
+              p.paymentStatus,
+            ].join(','));
+          }
+          csv = buf.toString();
+        default:
+          tab = 'item_catalog';
+          final buf = StringBuffer('Name,Category,Unit,Reorder level,Rx,Active\n');
+          for (final c in _visibleCatalog) {
+            buf.writeln([
+              _csvCell(c.name),
+              _csvCell(c.category),
+              _csvCell(c.unit),
+              _fmtQty(c.reorderLevel),
+              c.requiresPrescription ? 'yes' : 'no',
+              c.isActive ? 'yes' : 'no',
+            ].join(','));
+          }
+          csv = buf.toString();
+      }
+      final rows = csv.trim().split('\n').length - 1;
+      final path = await FileSaver.instance.saveFile(
+        name: _exportFileName(tab),
+        bytes: Uint8List.fromList(utf8.encode(csv)),
+        fileExtension: 'csv',
+        mimeType: MimeType.csv,
+      );
+      if (mounted) showToast(context, '$rows rows ($scope) saved to $path');
+    } catch (e) {
+      if (mounted) showToast(context, 'Export failed: $e', error: true);
+    } finally {
+      if (mounted) setState(() => _exporting = false);
     }
-    final lines = csv.trim().split('\n');
-    final preview = lines.take(13).join('\n');
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Text('Export — $name', style: sans(16, weight: FontWeight.w700, color: kInk)),
-        content: SizedBox(
-          width: 460,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('$scope · ${lines.length - 1} rows · CSV',
-                  style: sans(12.5, color: kInkMuted)),
-              const SizedBox(height: 10),
-              Container(
-                constraints: const BoxConstraints(maxHeight: 260),
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: kSurface,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: kBorder),
-                ),
-                child: SingleChildScrollView(
-                  child: Text(preview, style: mono(10.5, color: kInk)),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Close', style: sans(13.5, weight: FontWeight.w600, color: kInkMuted)),
-          ),
-          FilledButton.icon(
-            onPressed: () async {
-              await Clipboard.setData(ClipboardData(text: csv));
-              if (ctx.mounted) Navigator.of(ctx).pop();
-              if (mounted) showToast(context, 'CSV copied — paste it into Excel or Sheets.');
-            },
-            style: primaryButtonStyle(height: 40),
-            icon: const Icon(Icons.copy, size: 16),
-            label: const Text('Copy CSV'),
-          ),
-        ],
-      ),
-    );
   }
 
   // ---- Build -----------------------------------------------------------------
@@ -486,12 +462,24 @@ class _InventoryScreenState extends State<InventoryScreen> {
                           subtitle: _loading
                               ? 'Loading…'
                               : '${_visibleItems.length} items · $_scopeName',
-                          trailing: OutlinedButton.icon(
-                            onPressed: _loading ? null : _exportCurrentTab,
-                            style: outlineButtonStyle(height: 44),
-                            icon: const Icon(Icons.download_outlined, size: 18),
-                            label: const Text('Export'),
-                          ),
+                          trailing: _exporting
+                              ? const SizedBox(
+                                  width: 44,
+                                  height: 44,
+                                  child: Center(
+                                    child: SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(strokeWidth: 2, color: kPrimary),
+                                    ),
+                                  ),
+                                )
+                              : OutlinedButton.icon(
+                                  onPressed: _loading ? null : _exportCurrentTab,
+                                  style: outlineButtonStyle(height: 44),
+                                  icon: const Icon(Icons.download_outlined, size: 18),
+                                  label: const Text('Export'),
+                                ),
                         ),
                         const SizedBox(height: 18),
                         _filterBar(wide),
@@ -641,13 +629,6 @@ class _InventoryScreenState extends State<InventoryScreen> {
         value: 'MK ${_fmtMk(s.stockValue)}',
         sub: 'at buying price',
         icon: Icons.inventory_2_outlined,
-        onTap: null,
-      ),
-      _SummaryCard(
-        label: 'Potential profit',
-        value: 'MK ${_fmtMk(s.potentialProfit)}',
-        sub: 'on shelf now',
-        icon: Icons.trending_up_outlined,
         onTap: null,
       ),
       _SummaryCard(

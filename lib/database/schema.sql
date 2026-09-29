@@ -1124,3 +1124,205 @@ CREATE POLICY "Authenticated users view suppliers"
 CREATE POLICY "Admins manage suppliers"
     ON suppliers FOR ALL
     USING (is_admin()) WITH CHECK (is_admin());
+
+
+       -- ============================================================================
+-- REPORTS PREP: RLS for expenses / payments / customers + date-range functions
+-- ============================================================================
+
+CREATE INDEX IF NOT EXISTS idx_expenses_branch_date ON expenses(branch_id, expense_date);
+
+-- ----------------------------------------------------------------------------
+-- 1. EXPENSES: admin sees all; managers see and record their own branch only.
+--    (Cashiers and stock controllers never see expense figures.)
+-- ----------------------------------------------------------------------------
+ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "View expenses: admin all, manager own branch"
+    ON expenses FOR SELECT
+                               USING (is_admin() OR (branch_id = user_branch_id() AND user_role_name() = 'manager'));
+
+CREATE POLICY "Record expenses: admin all, manager own branch"
+    ON expenses FOR INSERT
+    WITH CHECK (is_admin() OR (branch_id = user_branch_id() AND user_role_name() = 'manager'));
+
+CREATE POLICY "Admins update expenses" ON expenses FOR UPDATE
+                                                                  USING (is_admin()) WITH CHECK (is_admin());
+CREATE POLICY "Admins delete expenses" ON expenses FOR DELETE
+USING (is_admin());
+
+-- ----------------------------------------------------------------------------
+-- 2. PAYMENTS (ledger: insert only, no update/delete policies for anyone)
+--    Customer payments: cashier/manager at own branch.
+--    Supplier payments: manager at own branch (stock controllers can view).
+-- ----------------------------------------------------------------------------
+ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "View payments: admin all, staff own branch"
+    ON payments FOR SELECT
+                               USING (
+                               is_admin()
+                               OR (branch_id = user_branch_id()
+                               AND (customer_id IS NOT NULL
+                               OR user_role_name() IN ('manager', 'stock_controller')))
+                               );
+
+CREATE POLICY "Record payments: admin all, staff own branch by role"
+    ON payments FOR INSERT
+    WITH CHECK (
+        is_admin()
+        OR (branch_id = user_branch_id()
+            AND ((customer_id IS NOT NULL AND user_role_name() IN ('cashier', 'manager'))
+              OR (supplier_id IS NOT NULL AND user_role_name() = 'manager')))
+    );
+
+-- ----------------------------------------------------------------------------
+-- 3. CUSTOMERS: admin sees all; staff see their own branch's customers.
+--    Customers with no branch are visible to admin only.
+-- ----------------------------------------------------------------------------
+ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "View customers: admin all, staff own branch"
+    ON customers FOR SELECT
+                                USING (is_admin() OR branch_id = user_branch_id());
+
+CREATE POLICY "Add customers: admin, or cashier/manager at own branch"
+    ON customers FOR INSERT
+    WITH CHECK (is_admin()
+        OR (branch_id = user_branch_id() AND user_role_name() IN ('cashier', 'manager')));
+
+CREATE POLICY "Edit customers: admin, or manager at own branch"
+    ON customers FOR UPDATE
+                                       USING (is_admin() OR (branch_id = user_branch_id() AND user_role_name() = 'manager'))
+                     WITH CHECK (is_admin() OR (branch_id = user_branch_id() AND user_role_name() = 'manager'));
+
+-- The balance is maintained by triggers only (they are SECURITY DEFINER and
+-- unaffected). This stops any client from editing it by hand.
+REVOKE UPDATE (current_balance) ON customers FROM authenticated;
+
+-- ----------------------------------------------------------------------------
+-- 4. DATE-RANGE REPORT FUNCTIONS
+--    p_from / p_to are inclusive dates. Default SECURITY INVOKER, so the RLS
+--    above applies: admin gets every branch, staff only their own.
+--    Dates are read in Malawi time (a sale at 11pm must not count as
+--    "tomorrow", which is what happens when the server uses UTC).
+-- ----------------------------------------------------------------------------
+
+-- 4a. Sales per branch for the period
+CREATE OR REPLACE FUNCTION report_sales_summary(
+    p_from date, p_to date, p_branch_id uuid DEFAULT NULL)
+RETURNS TABLE (branch_id uuid, branch_name text, transaction_count bigint, revenue numeric)
+LANGUAGE sql STABLE AS $$
+SELECT b.id, b.name, COUNT(s.id), COALESCE(SUM(s.total_amount), 0)
+FROM branches b
+         LEFT JOIN sales s
+                   ON s.branch_id = b.id
+                       AND s.sale_date >= (p_from::timestamp AT TIME ZONE 'Africa/Blantyre')
+                       AND s.sale_date <  ((p_to + 1)::timestamp AT TIME ZONE 'Africa/Blantyre')
+WHERE (p_branch_id IS NULL OR b.id = p_branch_id)
+  AND (is_admin() OR b.id = user_branch_id())
+GROUP BY b.id, b.name
+ORDER BY 4 DESC;
+$$;
+
+-- 4b. Sales trend for the chart. p_bucket: 'hour' | 'day' | 'week' | 'month' | 'year'
+CREATE OR REPLACE FUNCTION report_sales_trend(
+    p_from date, p_to date, p_bucket text DEFAULT 'day', p_branch_id uuid DEFAULT NULL)
+RETURNS TABLE (period_start timestamp, transaction_count bigint, revenue numeric)
+LANGUAGE sql STABLE AS $$
+SELECT date_trunc(p_bucket, s.sale_date AT TIME ZONE 'Africa/Blantyre'),
+       COUNT(*), SUM(s.total_amount)
+FROM sales s
+WHERE s.sale_date >= (p_from::timestamp AT TIME ZONE 'Africa/Blantyre')
+  AND s.sale_date <  ((p_to + 1)::timestamp AT TIME ZONE 'Africa/Blantyre')
+  AND (p_branch_id IS NULL OR s.branch_id = p_branch_id)
+GROUP BY 1
+ORDER BY 1;
+$$;
+
+-- 4c. Profit per branch: revenue, cost, gross, expenses, net, ranked by net profit
+CREATE OR REPLACE FUNCTION report_profit_summary(
+    p_from date, p_to date, p_branch_id uuid DEFAULT NULL)
+RETURNS TABLE (branch_id uuid, branch_name text, revenue numeric, cost_of_goods numeric,
+               gross_profit numeric, total_expenses numeric, net_profit numeric)
+LANGUAGE sql STABLE AS $$
+    WITH sold AS (
+        SELECT s.branch_id AS bid,
+               SUM(si.subtotal)              AS rev,
+               SUM(si.unit_cost * si.quantity) AS cogs,
+               SUM(si.profit)                AS gp
+        FROM sales s
+        JOIN sale_items si ON si.sale_id = s.id
+        WHERE s.sale_date >= (p_from::timestamp AT TIME ZONE 'Africa/Blantyre')
+          AND s.sale_date <  ((p_to + 1)::timestamp AT TIME ZONE 'Africa/Blantyre')
+        GROUP BY s.branch_id
+    ),
+    spent AS (
+        SELECT e.branch_id AS bid, SUM(e.amount) AS total
+        FROM expenses e
+        WHERE e.expense_date BETWEEN p_from AND p_to
+        GROUP BY e.branch_id
+    )
+SELECT b.id, b.name,
+       COALESCE(sold.rev, 0), COALESCE(sold.cogs, 0), COALESCE(sold.gp, 0),
+       COALESCE(spent.total, 0),
+       COALESCE(sold.gp, 0) - COALESCE(spent.total, 0)
+FROM branches b
+         LEFT JOIN sold  ON sold.bid  = b.id
+         LEFT JOIN spent ON spent.bid = b.id
+WHERE (p_branch_id IS NULL OR b.id = p_branch_id)
+  AND (is_admin() OR b.id = user_branch_id())
+ORDER BY 7 DESC;
+$$;
+
+-- 4d. Best sellers. p_rank_by: 'quantity' | 'revenue' | 'profit' | 'frequency'
+CREATE OR REPLACE FUNCTION report_best_sellers(
+    p_from date, p_to date, p_branch_id uuid DEFAULT NULL,
+    p_rank_by text DEFAULT 'quantity', p_limit int DEFAULT 10)
+RETURNS TABLE (item_id uuid, item_name text, total_quantity_sold numeric,
+               total_revenue numeric, total_profit numeric, times_sold bigint)
+LANGUAGE sql STABLE AS $$
+SELECT si.item_id, i.name,
+       SUM(si.quantity), SUM(si.subtotal), SUM(si.profit),
+       COUNT(DISTINCT si.sale_id)
+FROM sale_items si
+         JOIN sales s ON s.id = si.sale_id
+         JOIN items i ON i.id = si.item_id
+WHERE s.sale_date >= (p_from::timestamp AT TIME ZONE 'Africa/Blantyre')
+  AND s.sale_date <  ((p_to + 1)::timestamp AT TIME ZONE 'Africa/Blantyre')
+  AND (p_branch_id IS NULL OR s.branch_id = p_branch_id)
+GROUP BY si.item_id, i.name
+ORDER BY CASE p_rank_by
+    WHEN 'revenue'   THEN SUM(si.subtotal)
+    WHEN 'profit'    THEN SUM(si.profit)
+    WHEN 'frequency' THEN COUNT(DISTINCT si.sale_id)
+    ELSE SUM(si.quantity)
+END DESC
+    LIMIT p_limit;
+$$;
+
+-- 4e. Expenses by category (and branch) for the period
+CREATE OR REPLACE FUNCTION report_expenses_by_category(
+    p_from date, p_to date, p_branch_id uuid DEFAULT NULL)
+RETURNS TABLE (branch_id uuid, branch_name text, category text, total_amount numeric)
+LANGUAGE sql STABLE AS $$
+SELECT e.branch_id, b.name, e.category, SUM(e.amount)
+FROM expenses e
+         JOIN branches b ON b.id = e.branch_id
+WHERE e.expense_date BETWEEN p_from AND p_to
+  AND (p_branch_id IS NULL OR e.branch_id = p_branch_id)
+GROUP BY e.branch_id, b.name, e.category
+ORDER BY 4 DESC;
+$$;
+
+-- Signed-in users only
+REVOKE ALL ON FUNCTION report_sales_summary(date, date, uuid)                FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION report_sales_trend(date, date, text, uuid)            FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION report_profit_summary(date, date, uuid)               FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION report_best_sellers(date, date, uuid, text, int)      FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION report_expenses_by_category(date, date, uuid)         FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION report_sales_summary(date, date, uuid)             TO authenticated;
+GRANT EXECUTE ON FUNCTION report_sales_trend(date, date, text, uuid)         TO authenticated;
+GRANT EXECUTE ON FUNCTION report_profit_summary(date, date, uuid)            TO authenticated;
+GRANT EXECUTE ON FUNCTION report_best_sellers(date, date, uuid, text, int)   TO authenticated;
+GRANT EXECUTE ON FUNCTION report_expenses_by_category(date, date, uuid)      TO authenticated;
