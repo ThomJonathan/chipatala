@@ -927,3 +927,200 @@ REVOKE ALL ON FUNCTION admin_delete_branch(uuid) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION admin_delete_user(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION admin_delete_branch(uuid) TO authenticated;
 GRANT EXECUTE ON FUNCTION admin_delete_user(uuid) TO authenticated;
+
+
+ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admins view all expenses" ON expenses FOR SELECT USING (is_admin());
+CREATE POLICY "Staff view own branch expenses" ON expenses FOR SELECT USING (branch_id = user_branch_id());
+-- ============================================================================
+-- ADMIN INVENTORY PREP
+-- Needs Postgres 15+ (Supabase has it) for security_invoker views.
+-- ============================================================================
+
+-- Helper: role of the signed-in user (SECURITY DEFINER avoids RLS recursion)
+CREATE OR REPLACE FUNCTION user_role_name() RETURNS user_role
+LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public
+AS $$ SELECT role FROM users WHERE id = auth.uid(); $$;
+
+-- ----------------------------------------------------------------------------
+-- 0. Trigger functions must bypass RLS. They run as the caller, so once RLS is
+--    on, a cashier's sale_items insert could not update sales.total_amount
+--    (blocked silently), and a stock controller's purchase_items insert could
+--    not update purchases.total_amount.
+-- ----------------------------------------------------------------------------
+ALTER FUNCTION fn_recalc_sale_total()     SECURITY DEFINER SET search_path = public;
+ALTER FUNCTION fn_recalc_purchase_total() SECURITY DEFINER SET search_path = public;
+ALTER FUNCTION fn_apply_credit_sale()     SECURITY DEFINER SET search_path = public;
+ALTER FUNCTION fn_apply_payment()         SECURITY DEFINER SET search_path = public;
+
+-- ----------------------------------------------------------------------------
+-- 1. Make every view respect the caller's RLS (otherwise views run as their
+--    owner and skip branch isolation).
+-- ----------------------------------------------------------------------------
+ALTER VIEW v_current_stock              SET (security_invoker = true);
+ALTER VIEW v_low_stock                  SET (security_invoker = true);
+ALTER VIEW v_today_sales                SET (security_invoker = true);
+ALTER VIEW v_daily_profit               SET (security_invoker = true);
+ALTER VIEW v_expected_profit_from_stock SET (security_invoker = true);
+ALTER VIEW v_branch_financial_summary   SET (security_invoker = true);
+ALTER VIEW v_best_selling_items         SET (security_invoker = true);
+ALTER VIEW v_customer_debts             SET (security_invoker = true);
+ALTER VIEW v_supplier_balances          SET (security_invoker = true);
+ALTER VIEW v_customer_payment_history   SET (security_invoker = true);
+ALTER VIEW v_supplier_payment_history   SET (security_invoker = true);
+
+-- ----------------------------------------------------------------------------
+-- 2. Stock value per branch (cost value, retail value, potential profit)
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW v_stock_value WITH (security_invoker = true) AS
+SELECT
+    inv.branch_id,
+    b.name AS branch_name,
+    SUM(inv.quantity_available * inv.buying_price) AS stock_value_at_cost,
+    SUM(inv.quantity_available * inv.retail_price) AS stock_value_at_retail,
+    SUM(inv.quantity_available * (inv.retail_price - inv.buying_price)) AS potential_profit
+FROM inventory inv
+         JOIN branches b ON b.id = inv.branch_id
+WHERE inv.quantity_available > 0
+GROUP BY inv.branch_id, b.name;
+
+-- ----------------------------------------------------------------------------
+-- 3. Separate expired from expiring-soon
+--    (new columns are appended at the end so CREATE OR REPLACE is allowed)
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW v_expiring_soon WITH (security_invoker = true) AS
+SELECT
+    inv.id AS inventory_id,
+    inv.branch_id,
+    inv.item_id,
+    i.name AS item_name,
+    inv.quantity_available,
+    inv.expiry_date,
+    (inv.expiry_date - current_date) AS days_to_expiry,
+    b.name AS branch_name,
+    (inv.quantity_available * inv.buying_price) AS cost_value,
+    inv.batch_number
+FROM inventory inv
+         JOIN items i ON i.id = inv.item_id
+         JOIN branches b ON b.id = inv.branch_id
+WHERE inv.quantity_available > 0
+  AND inv.expiry_date IS NOT NULL
+  AND inv.expiry_date >= current_date                        -- NOT yet expired
+  AND inv.expiry_date <= current_date + INTERVAL '90 days'
+ORDER BY inv.expiry_date ASC;
+
+CREATE OR REPLACE VIEW v_expired_stock WITH (security_invoker = true) AS
+SELECT
+    inv.id AS inventory_id,
+    inv.branch_id,
+    inv.item_id,
+    i.name AS item_name,
+    inv.quantity_available,
+    inv.expiry_date,
+    (current_date - inv.expiry_date) AS days_expired,
+    b.name AS branch_name,
+    (inv.quantity_available * inv.buying_price) AS cost_value,
+    inv.batch_number
+FROM inventory inv
+         JOIN items i ON i.id = inv.item_id
+         JOIN branches b ON b.id = inv.branch_id
+WHERE inv.quantity_available > 0
+  AND inv.expiry_date IS NOT NULL
+  AND inv.expiry_date < current_date
+ORDER BY inv.expiry_date ASC;
+
+-- ----------------------------------------------------------------------------
+-- 4. Movements with readable names (for the audit-trail tab)
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE VIEW v_stock_movements_detail WITH (security_invoker = true) AS
+SELECT
+    m.id AS movement_id,
+    m.created_at,
+    m.branch_id,
+    b.name AS branch_name,
+    m.item_id,
+    i.name AS item_name,
+    m.inventory_id,
+    inv.batch_number,
+    m.movement_type,
+    m.quantity,
+    m.reference_table,
+    m.reference_id,
+    m.notes,
+    m.performed_by,
+    u.full_name AS performed_by_name
+FROM stock_movements m
+         JOIN branches b ON b.id = m.branch_id
+         JOIN items i ON i.id = m.item_id
+         JOIN inventory inv ON inv.id = m.inventory_id
+         LEFT JOIN users u ON u.id = m.performed_by
+ORDER BY m.created_at DESC;
+
+-- ----------------------------------------------------------------------------
+-- 5. RLS: stock_movements (append-only audit trail: no update/delete policies)
+-- ----------------------------------------------------------------------------
+ALTER TABLE stock_movements ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "View movements: admin all, staff own branch"
+    ON stock_movements FOR SELECT
+                                      USING (is_admin() OR branch_id = user_branch_id());
+
+CREATE POLICY "Record movements: admin all, staff own branch"
+    ON stock_movements FOR INSERT
+    WITH CHECK (is_admin() OR branch_id = user_branch_id());
+
+-- ----------------------------------------------------------------------------
+-- 6. RLS: purchases + purchase_items
+--    Admin: everything. Manager / stock controller: own branch only.
+--    Cashiers can view but not create purchases.
+-- ----------------------------------------------------------------------------
+ALTER TABLE purchases ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "View purchases: admin all, staff own branch"
+    ON purchases FOR SELECT
+                                USING (is_admin() OR branch_id = user_branch_id());
+
+CREATE POLICY "Create purchases: admin, or manager/stock controller at own branch"
+    ON purchases FOR INSERT
+    WITH CHECK (
+        is_admin()
+        OR (branch_id = user_branch_id()
+            AND user_role_name() IN ('manager', 'stock_controller'))
+    );
+
+CREATE POLICY "Admins update purchases"
+    ON purchases FOR UPDATE
+                                       USING (is_admin()) WITH CHECK (is_admin());
+
+ALTER TABLE purchase_items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "View purchase_items via parent purchase"
+    ON purchase_items FOR SELECT
+                                     USING (EXISTS (
+                                     SELECT 1 FROM purchases p
+                                     WHERE p.id = purchase_items.purchase_id
+                                     AND (is_admin() OR p.branch_id = user_branch_id())
+                                     ));
+
+CREATE POLICY "Insert purchase_items via parent purchase"
+    ON purchase_items FOR INSERT
+    WITH CHECK (EXISTS (
+        SELECT 1 FROM purchases p
+        WHERE p.id = purchase_items.purchase_id
+          AND (is_admin()
+               OR (p.branch_id = user_branch_id()
+                   AND user_role_name() IN ('manager', 'stock_controller')))
+    ));
+
+-- ----------------------------------------------------------------------------
+-- 7. RLS: suppliers (shared business-wide, like items)
+-- ----------------------------------------------------------------------------
+ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated users view suppliers"
+    ON suppliers FOR SELECT
+                                USING (auth.uid() IS NOT NULL);
+
+CREATE POLICY "Admins manage suppliers"
+    ON suppliers FOR ALL
+    USING (is_admin()) WITH CHECK (is_admin());

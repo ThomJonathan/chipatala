@@ -7,6 +7,7 @@ import '../../widgets/adminShell.dart';
 import 'adminhomeRepo.dart';
 import 'adminui.dart';
 import 'branch.dart';
+import 'inventory.dart';
 import 'settings.dart';
 import 'user.dart';
 
@@ -51,7 +52,7 @@ class _AdminHomeRouteState extends State<AdminHomeRoute> {
           userName: user.fullName,
           pages: [
             const AdminHomeScreen(),
-            const Center(child: Text('Inventory')),
+            const InventoryScreen(),
             const BranchesScreen(embedded: true),
             const UsersScreen(embedded: true),
             const Center(child: Text('Reports')),
@@ -109,6 +110,36 @@ String _formatMk(double amount) {
     buf.write(s[i]);
   }
   return buf.toString();
+}
+
+String _formatDate(String raw) {
+  try {
+    final d = DateTime.parse(raw);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final m = months[d.month - 1];
+    return '${d.day} $m ${d.year}';
+  } catch (_) {
+    return raw;
+  }
+}
+
+IconData _expenseIcon(String category) {
+  switch (category.trim().toLowerCase()) {
+    case 'transport':
+      return Icons.directions_car_outlined;
+    case 'electricity':
+      return Icons.bolt_outlined;
+    case 'rent':
+      return Icons.home_outlined;
+    case 'salaries':
+      return Icons.payments_outlined;
+    case 'internet':
+      return Icons.wifi_outlined;
+    case 'repairs':
+      return Icons.build_outlined;
+    default:
+      return Icons.receipt_long_outlined;
+  }
 }
 
 // ============================================================================
@@ -338,10 +369,18 @@ class _MobileLayout extends StatelessWidget {
             Expanded(child: _StatCard(label: 'Credit given today', value: 'MK ${_formatMk(data.creditToday)}', sub: '${data.creditSalesToday} credit sales', valueColor: _kDebtColor)),
           ],
         ),
+        const SizedBox(height: 12),
+        _StatCard(
+          label: 'Expenses today',
+          value: 'MK ${_formatMk(data.expensesToday)}',
+          sub: '${data.expensesCountToday} ${data.expensesCountToday == 1 ? 'expense' : 'expenses'} recorded',
+        ),
         const SizedBox(height: 22),
         _SectionLabel('Sales by branch'),
         const SizedBox(height: 10),
         _BranchSalesList(branches: data.branchSales),
+        const SizedBox(height: 22),
+        _ExpensesSection(expenses: data.recentExpenses, expensesToday: data.expensesToday),
         const SizedBox(height: 22),
         _AttentionButton(count: data.attentionItems.length, onTap: () => _openAttentionPage(context, data.attentionItems)),
         const SizedBox(height: 24),
@@ -371,6 +410,14 @@ class _DesktopLayout extends StatelessWidget {
             Expanded(child: _StatCard(label: 'Sales today', value: 'MK ${_formatMk(data.salesToday)}', sub: '${data.salesTransactionsToday} transactions')),
             const SizedBox(width: 16),
             Expanded(child: _StatCard(label: 'Credit given today', value: 'MK ${_formatMk(data.creditToday)}', sub: '${data.creditSalesToday} credit sales', valueColor: _kDebtColor)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _StatCard(
+                label: 'Expenses today',
+                value: 'MK ${_formatMk(data.expensesToday)}',
+                sub: '${data.expensesCountToday} ${data.expensesCountToday == 1 ? 'expense' : 'expenses'} recorded',
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 28),
@@ -414,6 +461,8 @@ class _DesktopLayout extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(height: 28),
+        _ExpensesSection(expenses: data.recentExpenses, expensesToday: data.expensesToday),
       ],
     );
   }
@@ -518,6 +567,150 @@ class _BranchSalesList extends StatelessWidget {
             ),
           );
         }),
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// EXPENSES
+// ============================================================================
+
+void _openExpensesSheet(BuildContext context, List<ExpenseRecord> expenses) {
+  showAdaptiveSheet(
+    context,
+    builder: (_) => SheetFrame(
+      title: 'All expenses',
+      subtitle: '${expenses.length} ${expenses.length == 1 ? 'record' : 'records'} · latest first',
+      child: ExpensesSheetContent(expenses: expenses),
+    ),
+  );
+}
+
+class _ExpensesSection extends StatelessWidget {
+  final List<ExpenseRecord> expenses;
+  final double expensesToday;
+  const _ExpensesSection({required this.expenses, required this.expensesToday});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: _SectionLabel('Expenses · MK ${_formatMk(expensesToday)} today')),
+            const SizedBox(width: 12),
+            if (expenses.length > 5)
+              TextButton(
+                onPressed: () => _openExpensesSheet(context, expenses),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: Text('View all', style: _sans(12.5, weight: FontWeight.w600, color: _kPrimary)),
+              ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _ExpenseList(expenses: expenses.take(5).toList(), showViewAll: expenses.length > 5),
+      ],
+    );
+  }
+}
+
+class _ExpenseList extends StatelessWidget {
+  final List<ExpenseRecord> expenses;
+  final bool showViewAll;
+  const _ExpenseList({required this.expenses, this.showViewAll = false});
+
+  @override
+  Widget build(BuildContext context) {
+    if (expenses.isEmpty) {
+      return Container(
+        decoration: BoxDecoration(border: Border.all(color: _kBorder), borderRadius: BorderRadius.circular(12)),
+        padding: const EdgeInsets.all(16),
+        child: Text('No expenses recorded for this filter.', style: _sans(13, color: _kInkMuted)),
+      );
+    }
+    return Container(
+      decoration: BoxDecoration(border: Border.all(color: _kBorder), borderRadius: BorderRadius.circular(12)),
+      child: Column(
+        children: List.generate(expenses.length, (i) {
+          final last = i == expenses.length - 1 && !showViewAll;
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              border: last ? null : const Border(bottom: BorderSide(color: _kBorder)),
+            ),
+            child: _ExpenseRow(expense: expenses[i]),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class _ExpenseRow extends StatelessWidget {
+  final ExpenseRecord expense;
+  const _ExpenseRow({required this.expense});
+
+  @override
+  Widget build(BuildContext context) {
+    final title = expense.description.trim().isNotEmpty ? expense.description.trim() : expense.category;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(color: const Color(0xFFF0F4FD), borderRadius: BorderRadius.circular(8)),
+          child: Icon(_expenseIcon(expense.category), size: 18, color: _kPrimary),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: _sans(13.5, weight: FontWeight.w500, color: _kInk)),
+              const SizedBox(height: 2),
+              Text(
+                '${expense.branchName} · ${expense.category} · ${_formatDate(expense.expenseDate)}',
+                style: _sans(12, color: _kInkMuted),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text('MK ${_formatMk(expense.amount)}', style: _mono(13.5, weight: FontWeight.w600, color: _kInk)),
+      ],
+    );
+  }
+}
+
+class ExpensesSheetContent extends StatelessWidget {
+  final List<ExpenseRecord> expenses;
+  const ExpensesSheetContent({super.key, required this.expenses});
+
+  @override
+  Widget build(BuildContext context) {
+    if (expenses.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: Text('No expenses here.', style: _sans(13.5, color: _kInkMuted))),
+      );
+    }
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 420),
+      child: ListView.separated(
+        shrinkWrap: true,
+        itemCount: expenses.length,
+        separatorBuilder: (ctx, index) => const Divider(height: 1, color: _kBorder),
+        itemBuilder: (context, i) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: _ExpenseRow(expense: expenses[i]),
+        ),
       ),
     );
   }

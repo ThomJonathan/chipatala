@@ -50,6 +50,25 @@ class BranchSalesSummary {
   });
 }
 
+class ExpenseRecord {
+  final String id;
+  final String branchId;
+  final String branchName;
+  final String category;
+  final double amount;
+  final String description;
+  final String expenseDate; // YYYY-MM-DD
+  const ExpenseRecord({
+    required this.id,
+    required this.branchId,
+    required this.branchName,
+    required this.category,
+    required this.amount,
+    required this.description,
+    required this.expenseDate,
+  });
+}
+
 class AdminHomeData {
   final double salesToday;
   final int salesTransactionsToday;
@@ -57,6 +76,9 @@ class AdminHomeData {
   final int creditSalesToday;
   final List<BranchSalesSummary> branchSales;
   final List<AttentionItem> attentionItems;
+  final double expensesToday;
+  final int expensesCountToday;
+  final List<ExpenseRecord> recentExpenses;
 
   const AdminHomeData({
     required this.salesToday,
@@ -65,6 +87,9 @@ class AdminHomeData {
     required this.creditSalesToday,
     required this.branchSales,
     required this.attentionItems,
+    required this.expensesToday,
+    required this.expensesCountToday,
+    required this.recentExpenses,
   });
 
   static const empty = AdminHomeData(
@@ -74,6 +99,9 @@ class AdminHomeData {
     creditSalesToday: 0,
     branchSales: [],
     attentionItems: [],
+    expensesToday: 0,
+    expensesCountToday: 0,
+    recentExpenses: [],
   );
 }
 
@@ -104,6 +132,7 @@ class AdminHomeRepository {
   Future<AdminHomeData> fetchAdminHomeData({String? branchId}) async {
     final range = _todayRange();
     final branches = await fetchBranches();
+    final branchNames = {for (final b in branches) b.id: b.name};
 
     // ---- Sales today (every payment method) -------------------------------
     var salesQuery = _client
@@ -147,6 +176,46 @@ class AdminHomeRepository {
     for (final row in creditRows) {
       creditToday += (row['total_amount'] as num).toDouble();
     }
+
+    // ---- Expenses today ----------------------------------------------------
+    final todayStr = _todayDateStr();
+    var expTodayQuery = _client
+        .from('expenses')
+        .select('amount')
+        .eq('expense_date', todayStr);
+    if (branchId != null) expTodayQuery = expTodayQuery.eq('branch_id', branchId);
+    final expTodayRows = await expTodayQuery as List;
+
+    double expensesToday = 0;
+    for (final row in expTodayRows) {
+      expensesToday += (row['amount'] as num).toDouble();
+    }
+
+    // ---- Recent expenses (respects the same branch filter) -----------------
+    dynamic recentBase = _client
+        .from('expenses')
+        .select('id, branch_id, category, amount, description, expense_date, created_at, branches(name)');
+    if (branchId != null) recentBase = recentBase.eq('branch_id', branchId);
+    final recentRows = await recentBase
+        .order('expense_date', ascending: false)
+        .order('created_at', ascending: false)
+        .limit(30) as List;
+
+    final recentExpenses = recentRows.map((row) {
+      final embedded = row['branches'];
+      final embeddedName =
+      embedded is Map ? embedded['name'] as String? : null;
+      final bId = row['branch_id'] as String;
+      return ExpenseRecord(
+        id: row['id'] as String,
+        branchId: bId,
+        branchName: embeddedName ?? branchNames[bId] ?? 'Unknown branch',
+        category: (row['category'] as String?) ?? 'Other',
+        amount: (row['amount'] as num).toDouble(),
+        description: (row['description'] as String?) ?? '',
+        expenseDate: (row['expense_date'] as String?) ?? todayStr,
+      );
+    }).toList();
 
     // ---- Low stock — branch_name now comes straight from the view --------
     var lowStockQuery = _client
@@ -197,6 +266,16 @@ class AdminHomeRepository {
       creditSalesToday: creditRows.length,
       branchSales: branchSales,
       attentionItems: attentionItems,
+      expensesToday: expensesToday,
+      expensesCountToday: expTodayRows.length,
+      recentExpenses: recentExpenses,
     );
+  }
+
+  String _todayDateStr() {
+    final now = DateTime.now();
+    final mm = now.month.toString().padLeft(2, '0');
+    final dd = now.day.toString().padLeft(2, '0');
+    return '${now.year}-$mm-$dd';
   }
 }
