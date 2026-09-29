@@ -88,10 +88,10 @@ class _AdminHomeRouteState extends State<AdminHomeRoute> {
 
 const double _kDesktopBreakpoint = 760;
 const Color _kBg = Colors.white;
-const Color _kBorder = Color(0xFFE3E6E2);
-const Color _kInkMuted = Color(0xFF616A66);
-const Color _kInk = Color(0xFF1B1F1D);
-const Color _kPrimary = Color(0xFF0B4A43);
+const Color _kBorder = Color(0xFFD9E2F5);
+const Color _kInkMuted = Color(0xFF5B6B8C);
+const Color _kInk = Color(0xFF0F2038);
+const Color _kPrimary = Color(0xFF143D9E);
 const Color _kDebtColor = Color(0xFFB4544A);
 const Color _kWarnColor = Color(0xFFB07A28);
 
@@ -162,6 +162,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
         final isDesktop = constraints.maxWidth >= _kDesktopBreakpoint;
         return Container(
           color: _kBg,
+          constraints: BoxConstraints(
+            minWidth: constraints.maxWidth,
+            minHeight: constraints.maxHeight,
+          ),
           child: SafeArea(
             child: RefreshIndicator(
               onRefresh: _refresh,
@@ -172,51 +176,54 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                   horizontal: isDesktop ? 32 : 18,
                   vertical: isDesktop ? 28 : 18,
                 ),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints:
-                    BoxConstraints(maxWidth: isDesktop ? 1080 : double.infinity),
-                    child: FutureBuilder<AdminHomeData>(
-                      future: _dataFuture,
-                      builder: (context, snapshot) {
-                        final header = _Header(
-                          branches: _branches,
-                          selectedBranchId: _selectedBranchId,
-                          onBranchChanged: _onBranchChanged,
-                        );
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints:
+                      BoxConstraints(maxWidth: isDesktop ? 1080 : double.infinity),
+                      child: FutureBuilder<AdminHomeData>(
+                        future: _dataFuture,
+                        builder: (context, snapshot) {
+                          final header = _Header(
+                            branches: _branches,
+                            selectedBranchId: _selectedBranchId,
+                            onBranchChanged: _onBranchChanged,
+                          );
 
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              header,
-                              const SizedBox(height: 60),
-                              const Center(
-                                child: Padding(
-                                  padding: EdgeInsets.only(top: 40),
-                                  child: CircularProgressIndicator(color: _kPrimary),
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                header,
+                                const SizedBox(height: 60),
+                                const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.only(top: 40),
+                                    child: CircularProgressIndicator(color: _kPrimary),
+                                  ),
                                 ),
-                              ),
-                            ],
-                          );
-                        }
+                              ],
+                            );
+                          }
 
-                        if (snapshot.hasError) {
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              header,
-                              const SizedBox(height: 40),
-                              _ErrorState(message: '${snapshot.error}', onRetry: _refresh),
-                            ],
-                          );
-                        }
+                          if (snapshot.hasError) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                header,
+                                const SizedBox(height: 40),
+                                _ErrorState(message: '${snapshot.error}', onRetry: _refresh),
+                              ],
+                            );
+                          }
 
-                        final data = snapshot.data ?? AdminHomeData.empty;
-                        return isDesktop
-                            ? _DesktopLayout(data: data, header: header)
-                            : _MobileLayout(data: data, header: header);
-                      },
+                          final data = snapshot.data ?? AdminHomeData.empty;
+                          return isDesktop
+                              ? _DesktopLayout(data: data, header: header)
+                              : _MobileLayout(data: data, header: header);
+                        },
+                      ),
                     ),
                   ),
                 ),
@@ -503,7 +510,7 @@ class _BranchSalesList extends StatelessWidget {
                   child: LinearProgressIndicator(
                     value: ratio,
                     minHeight: 5,
-                    backgroundColor: const Color(0xFFEFF1EF),
+                    backgroundColor: const Color(0xFFE4EAFB),
                     valueColor: const AlwaysStoppedAnimation<Color>(_kPrimary),
                   ),
                 ),

@@ -6,13 +6,13 @@ import 'package:google_fonts/google_fonts.dart';
 // ============================================================================
 
 const double kWideContentBreakpoint = 760;
-const Color kBg = Color(0xFFFBFCFB);
-const Color kSurface = Color(0xFFF6F8F6);
-const Color kBorder = Color(0xFFD9DCD9);
-const Color kInk = Color(0xFF1B1F1D);
-const Color kInkMuted = Color(0xFF616A66);
-const Color kPrimary = Color(0xFF0B4A43);
-const Color kPrimaryTint = Color(0xFFE3EEEB);
+const Color kBg = Color(0xFFF7F9FF);
+const Color kSurface = Color(0xFFF0F4FD);
+const Color kBorder = Color(0xFFD9E2F5);
+const Color kInk = Color(0xFF0F2038);
+const Color kInkMuted = Color(0xFF5B6B8C);
+const Color kPrimary = Color(0xFF143D9E);
+const Color kPrimaryTint = Color(0xFFE4EAFB);
 const Color kDanger = Color(0xFFB4544A);
 const Color kDangerTint = Color(0xFFFBEBEA);
 const Color kSuccess = Color(0xFF2E7D32);

@@ -45,10 +45,10 @@ class MyApp extends StatelessWidget {
       title: 'Tumaini Investments',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        scaffoldBackgroundColor: const Color(0xFFF6F8F5),
+        scaffoldBackgroundColor: const Color(0xFFF7F9FF),
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF0B4A43),
-          primary: const Color(0xFF0B4A43),
+          seedColor: const Color(0xFF143D9E),
+          primary: const Color(0xFF143D9E),
           surface: Colors.white,
         ),
       ),

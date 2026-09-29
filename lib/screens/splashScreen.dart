@@ -6,14 +6,14 @@ import '../auth-repository.dart';
 
 /// Design tokens — matching the web splash screen 1:1.
 class AppPalette {
-  static const bg = Color(0xFFF6F8F5);
-  static const ink = Color(0xFF17221D);
-  static const inkMuted = Color(0xFF5C6B63);
-  static const primary = Color(0xFF0B4A43);
-  static const primaryDeep = Color(0xFF0E5C54);
-  static const primaryTint = Color(0xFFE3EEEB);
-  static const accent = Color(0xFFC68A3D);
-  static const border = Color(0xFFDDE5DE);
+  static const bg = Color(0xFFF7F9FF);
+  static const ink = Color(0xFF0F2038);
+  static const inkMuted = Color(0xFF5B6B8C);
+  static const primary = Color(0xFF143D9E);
+  static const primaryDeep = Color(0xFF0B2A72);
+  static const primaryTint = Color(0xFFE4EAFB);
+  static const accent = Color(0xFFC9A227);
+  static const border = Color(0xFFD9E2F5);
 }
 
 /// First screen of the app. Shows itself for [holdDuration], then checks

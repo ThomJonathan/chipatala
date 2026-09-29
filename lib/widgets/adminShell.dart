@@ -11,9 +11,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // ============================================================================
 
 const double _kDesktopBreakpoint = 760;
-const Color _kBorder = Color(0xFFD9DCD9);
-const Color _kInkMuted = Color(0xFF616A66);
-const Color _kSidebarBg = Color(0xFFFBFCFB);
+const Color _kBorder = Color(0xFFD9E2F5);
+const Color _kInkMuted = Color(0xFF5B6B8C);
+const Color _kSidebarBg = Color(0xFFFFFFFF);
 
 class _NavDestination {
   final IconData icon;
