@@ -8,6 +8,7 @@ import 'adminhomeRepo.dart';
 import 'adminui.dart';
 import 'branch.dart';
 import 'inventory.dart';
+import 'reports.dart';
 import 'settings.dart';
 import 'user.dart';
 
@@ -55,7 +56,7 @@ class _AdminHomeRouteState extends State<AdminHomeRoute> {
             const InventoryScreen(),
             const BranchesScreen(embedded: true),
             const UsersScreen(embedded: true),
-            const Center(child: Text('Reports')),
+            const ReportsScreen(),
             AdminSettingsScreen(userName: user.fullName),
           ],
         );
