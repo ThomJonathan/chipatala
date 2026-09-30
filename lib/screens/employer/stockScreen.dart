@@ -1,12 +1,18 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../appUser.dart';
 import '../../widgets/employeeShell.dart';
-import 'employeeHome.dart';
+import 'employeeHome.dart' show branchStockFilter;
 import 'employeeUi.dart';
 import 'stockRepo.dart';
+
+// ============================================================================
+// CASHIER STOCK — own-branch stock list + receiving deliveries.
+//   Receiving needs stock access (admin grant); without it the screen is
+//   read-only with a "Request access" path. Home's alert cards deep-link
+//   here pre-filtered via branchStockFilter. New stock appears on the sales
+//   list immediately after receive_stock_delivery() commits.
+// ============================================================================
 
 class StockScreen extends StatefulWidget {
   final AppUser user;
@@ -17,71 +23,88 @@ class StockScreen extends StatefulWidget {
   State<StockScreen> createState() => _StockScreenState();
 }
 
-enum _StockFilter { all, low, expiring, expired, out }
-
 class _StockScreenState extends State<StockScreen> {
-  final _repo = StockRepository();
-  final _search = TextEditingController();
-  List<StockItem> _items = [];
-  List<String> _categories = [];
-  StockAccessState? _access;
-  bool _loading = true;
-  bool _receiveMode = false;
-  String? _error;
-  String? _category;
-  _StockFilter _filter = _StockFilter.all;
-  Timer? _timer;
+  final _repo = CashierStockRepository();
+  final _searchCtrl = TextEditingController();
 
-  String get _branchId => widget.user.branchId!;
+  bool _loading = true;
+  String? _error;
+  List<BranchStockRow> _rows = [];
+  String _query = '';
+  String _chip = 'all'; // all | low | expiring
+
+  bool _canReceive = false;
+  OwnAccess _access = const OwnAccess(state: OwnAccessState.none);
+
+  bool _loadedOnce = false;
+  bool _wasSelected = false;
+
+  String? get _branchId => widget.user.branchId;
 
   @override
   void initState() {
     super.initState();
+    _consumeIncomingFilter();
     _load();
-    _timer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (mounted && !_receiveMode) _loadAccess(silent: true);
-    });
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _consumeIncomingFilter({bool notify = false}) {
+    final f = branchStockFilter.value;
+    branchStockFilter.value = null;
+    if (f == 'low' || f == 'expiring') {
+      _chip = f!;
+      if (notify && mounted) setState(() {});
+    }
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final selected = EmployeeShellScope.of(context)?.selectedIndex == 2;
-    if (selected) {
-      final filter = branchStockFilter.value;
-      if (filter != null) {
-        branchStockFilter.value = null;
-        _filter = filter == 'low' ? _StockFilter.low : _StockFilter.expiring;
+    if (selected && !_wasSelected) {
+      if (_loadedOnce) {
+        _consumeIncomingFilter(notify: true);
+        _load(silent: true);
       }
-      if (!_receiveMode) _load(silent: true);
     }
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _search.dispose();
-    super.dispose();
+    _wasSelected = selected;
   }
 
   Future<void> _load({bool silent = false}) async {
-    if (!silent)
+    final bid = _branchId;
+    if (bid == null) {
+      setState(() {
+        _loading = false;
+        _error = 'No branch assigned to this account yet.';
+      });
+      return;
+    }
+    if (!silent) {
       setState(() {
         _loading = true;
         _error = null;
       });
+    }
     try {
       final results = await Future.wait([
-        _repo.fetchItems(branchId: _branchId),
-        _repo.fetchCategories(),
-        _repo.fetchAccess(),
+        _repo.fetchStock(branchId: bid, query: _query),
+        _repo.hasAccess(),
+        _repo.myStatus(),
       ]);
       if (!mounted) return;
       setState(() {
-        _items = results[0] as List<StockItem>;
-        _categories = results[1] as List<String>;
-        _access = results[2] as StockAccessState?;
+        _rows = results[0] as List<BranchStockRow>;
+        _canReceive = results[1] as bool;
+        _access = results[2] as OwnAccess;
         _loading = false;
+        _error = null;
+        _loadedOnce = true;
       });
     } catch (e) {
       if (!mounted) return;
@@ -92,1021 +115,639 @@ class _StockScreenState extends State<StockScreen> {
     }
   }
 
-  Future<void> _loadAccess({bool silent = false}) async {
-    try {
-      final value = await _repo.fetchAccess();
-      if (mounted) setState(() => _access = value);
-    } catch (_) {
-      if (!silent && mounted)
-        empToast(context, 'Could not refresh stock access.', error: true);
-    }
-  }
-
-  List<StockItem> get _visible {
-    final q = _search.text.trim().toLowerCase();
-    return _items.where((item) {
-      if (q.isNotEmpty && !item.name.toLowerCase().contains(q)) return false;
-      if (_category != null && item.category != _category) return false;
-      switch (_filter) {
-        case _StockFilter.low:
-          return item.isLow;
-        case _StockFilter.expiring:
-          return item.isExpiringSoon;
-        case _StockFilter.expired:
-          return item.isExpired;
-        case _StockFilter.out:
-          return item.isOut;
-        case _StockFilter.all:
-          return true;
+  List<BranchStockRow> get _visible {
+    return _rows.where((r) {
+      switch (_chip) {
+        case 'low':
+          if (!r.low) return false;
+        case 'expiring':
+          if (!r.expiring) return false;
       }
+      return true;
     }).toList();
   }
 
   Future<void> _requestAccess() async {
-    final reason = await _reasonSheet();
-    if (reason == null) return;
+    final reason = await _showStockSheet<String>(
+      context,
+      builder: (_) => _ReasonSheet(),
+    );
+    if (reason == null || reason.trim().isEmpty) return;
     try {
       await _repo.requestAccess(reason);
-      await _loadAccess();
-      if (mounted) empToast(context, 'Request sent to the admin.');
+      await _load(silent: true);
+      if (mounted) empToast(context, 'Request sent. The admin will decide.');
     } on StockException catch (e) {
       if (mounted) empToast(context, e.message, error: true);
     }
   }
 
   Future<void> _endAccess() async {
+    final id = _access.requestId;
+    if (id == null) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Done receiving stock?'),
-        content: const Text('This will end your stock access immediately.'),
+        title: const Text('End your stock access?'),
+        content: const Text('You will no longer be able to receive stock.'),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("I'm done"),
-          ),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Keep it')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('I’m done')),
         ],
       ),
     );
     if (ok != true) return;
     try {
-      await _repo.endAccess();
-      await _loadAccess();
-      if (mounted) empToast(context, 'Stock access ended.');
+      await _repo.endOwnAccess(id);
+      await _load(silent: true);
+      if (mounted) empToast(context, 'Access ended.');
     } on StockException catch (e) {
       if (mounted) empToast(context, e.message, error: true);
     }
   }
 
-  Future<String?> _reasonSheet() async {
-    final controller = TextEditingController();
-    String? selected;
-    final result = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheet) => EmpSheetFrame(
-          title: 'Request stock access',
-          subtitle: 'Tell the admin why you need to receive or update stock.',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Wrap(
-                spacing: 8,
-                children: [
-                  for (final value in [
-                    'Delivery arrived',
-                    'MSD delivery arrived',
-                    'Stock count',
-                  ])
-                    ChoiceChip(
-                      label: Text(value),
-                      selected: selected == value,
-                      onSelected: (_) {
-                        setSheet(() {
-                          selected = value;
-                          controller.text = value;
-                        });
-                      },
-                    ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              TextField(
-                controller: controller,
-                maxLines: 2,
-                decoration: empField(
-                  'Reason (optional)',
-                  hint: 'For example: Delivery arrived',
-                ),
-              ),
-              const SizedBox(height: 14),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, controller.text),
-                style: empPrimaryButton(),
-                child: const Text('Send request'),
-              ),
-            ],
-          ),
-        ),
-      ),
+  Future<void> _receive() async {
+    final bid = _branchId;
+    if (bid == null) return;
+    final done = await _showStockSheet<bool>(
+      context,
+      builder: (_) => _ReceiveSheet(repo: _repo, branchId: bid),
     );
-    controller.dispose();
-    return result;
+    if (done == true && mounted) {
+      stockChanged.value++; // sale list + home pick up the new quantities
+      await _load(silent: true);
+      if (mounted) empToast(context, 'Delivery received — items are on the sales list.');
+    }
   }
 
-  Future<void> _details(StockItem item) async {
-    final batches = await _repo.fetchBatches(
-      branchId: _branchId,
-      itemId: item.id,
-    );
-    if (!mounted) return;
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => EmpSheetFrame(
-        title: item.name,
-        subtitle: '${item.category} · ${item.unit}',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (item.prescription) _tag('Prescription', empWarnTint, empWarn),
-            const SizedBox(height: 10),
-            if (batches.isEmpty)
-              const EmpEmpty(
-                icon: Icons.inventory_2_outlined,
-                message: 'Nothing is currently on the shelf.',
-              )
-            else
-              for (final batch in batches) _BatchTile(batch: batch),
-            const SizedBox(height: 12),
-            if (!item.discontinued && !item.isOut)
-              OutlinedButton.icon(
-                onPressed: () {
-                  Navigator.pop(context);
-                  EmployeeShell.switchTo(context, 1);
-                },
-                icon: const Icon(Icons.point_of_sale_outlined),
-                label: const Text('Add to sale'),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _tag(String text, Color bg, Color fg) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-      color: bg,
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: Text(
-      text,
-      style: empSans(11, weight: FontWeight.w600, color: fg),
-    ),
-  );
+  // ---- Build ---------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) {
-    if (_receiveMode && _access?.canReceive == true) {
-      return _ReceiveStockPage(
-        branchId: _branchId,
-        repo: _repo,
-        onDone: () {
-          setState(() => _receiveMode = false);
-          _load();
-        },
-        onCancel: () => setState(() => _receiveMode = false),
-      );
-    }
     return Scaffold(
       backgroundColor: empBg,
-      body: RefreshIndicator(
-        color: empPrimary,
-        onRefresh: () => _load(),
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 28),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1180),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Stock',
-                          style: empSans(
-                            22,
-                            weight: FontWeight.w700,
-                            color: empInk,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => _load(),
-                        icon: const Icon(Icons.refresh, color: empMuted),
-                      ),
-                    ],
+      body: SafeArea(
+        child: RefreshIndicator(
+          color: empPrimary,
+          onRefresh: () => _load(silent: true),
+          child: LayoutBuilder(
+            builder: (context, c) {
+              final wide = c.maxWidth >= empWideBreakpoint;
+              return SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: EdgeInsets.fromLTRB(wide ? 32 : 18, wide ? 28 : 14, wide ? 32 : 18, 24),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 1080),
+                    child: _body(wide),
                   ),
-                  const SizedBox(height: 12),
-                  _AccessBanner(
-                    access: _access,
-                    onRequest: _requestAccess,
-                    onReceive: () => setState(() => _receiveMode = true),
-                    onDone: _endAccess,
-                  ),
-                  const SizedBox(height: 14),
-                  if (_loading)
-                    const Padding(
-                      padding: EdgeInsets.all(40),
-                      child: Center(
-                        child: CircularProgressIndicator(color: empPrimary),
-                      ),
-                    )
-                  else if (_error != null)
-                    EmpCard(
-                      child: Text(
-                        _error!,
-                        style: empSans(13, color: empDanger),
-                      ),
-                    )
-                  else ...[
-                    TextField(
-                      controller: _search,
-                      onChanged: (_) => setState(() {}),
-                      decoration:
-                          empField(
-                            'Search stock',
-                            hint: 'Search by item name',
-                          ).copyWith(
-                            prefixIcon: const Icon(
-                              Icons.search,
-                              color: empMuted,
-                            ),
-                          ),
-                    ),
-                    const SizedBox(height: 10),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          _chip('All', _StockFilter.all, _items.length),
-                          _chip(
-                            'Low',
-                            _StockFilter.low,
-                            _items.where((i) => i.isLow).length,
-                          ),
-                          _chip(
-                            'Expiring soon',
-                            _StockFilter.expiring,
-                            _items.where((i) => i.isExpiringSoon).length,
-                          ),
-                          _chip(
-                            'Expired',
-                            _StockFilter.expired,
-                            _items.where((i) => i.isExpired).length,
-                          ),
-                          _chip(
-                            'Out of stock',
-                            _StockFilter.out,
-                            _items.where((i) => i.isOut).length,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    if (_categories.isNotEmpty)
-                      DropdownButtonFormField<String?>(
-                        value: _category,
-                        decoration: empField('Category'),
-                        items: [
-                          const DropdownMenuItem(
-                            value: null,
-                            child: Text('All categories'),
-                          ),
-                          ..._categories.map(
-                            (c) => DropdownMenuItem(value: c, child: Text(c)),
-                          ),
-                        ],
-                        onChanged: (v) => setState(() => _category = v),
-                      ),
-                    const SizedBox(height: 14),
-                    if (_visible.isEmpty)
-                      EmpEmpty(
-                        icon: Icons.inventory_2_outlined,
-                        message: _filter == _StockFilter.low
-                            ? 'Nothing is low on stock right now.'
-                            : 'No stock matches these filters.',
-                      )
-                    else
-                      LayoutBuilder(
-                        builder: (_, c) => c.maxWidth >= empWideBreakpoint
-                            ? _desktopList(_visible)
-                            : _mobileList(_visible),
-                      ),
-                  ],
-                ],
-              ),
-            ),
+                ),
+              );
+            },
           ),
         ),
       ),
     );
   }
 
-  Widget _chip(String label, _StockFilter value, int count) => Padding(
-    padding: const EdgeInsets.only(right: 8),
-    child: ChoiceChip(
-      label: Text('$label ($count)'),
-      selected: _filter == value,
-      onSelected: (_) => setState(() => _filter = value),
-    ),
-  );
-
-  Widget _desktopList(List<StockItem> rows) => EmpCard(
-    child: Column(
+  Widget _body(bool wide) {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 90),
+        child: Center(child: CircularProgressIndicator(color: empPrimary)),
+      );
+    }
+    if (_error != null || _branchId == null) {
+      return EmpCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Couldn’t load stock', style: empSans(15, weight: FontWeight.w700, color: empInk)),
+            const SizedBox(height: 6),
+            Text(_error ?? '', style: empSans(13, color: empMuted)),
+            const SizedBox(height: 14),
+            FilledButton(onPressed: _load, style: empPrimaryButton(height: 44), child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-          child: Row(
-            children: [
-              Expanded(flex: 3, child: Text('Item')),
-              Expanded(flex: 2, child: Text('Category')),
-              Expanded(child: Text('Available')),
-              Expanded(child: Text('Price')),
-              Expanded(child: Text('Status')),
-            ],
+        Text('Stock', style: empSans(22, weight: FontWeight.w700, color: empInk)),
+        const SizedBox(height: 2),
+        Text(widget.branchName, style: empSans(12.5, color: empMuted)),
+        const SizedBox(height: 14),
+        _accessBanner(),
+        const SizedBox(height: 14),
+        SizedBox(
+          height: 54,
+          child: FilledButton.icon(
+            onPressed: _canReceive ? _receive : null,
+            style: empPrimaryButton(height: 54),
+            icon: const Icon(Icons.add_box_outlined, size: 21),
+            label: const Text('Receive stock'),
           ),
         ),
-        for (final item in rows)
-          _StockRow(item: item, onTap: () => _details(item)),
-      ],
-    ),
-  );
-
-  Widget _mobileList(List<StockItem> rows) => Column(
-    children: [
-      for (final item in rows)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 10),
-          child: _StockCard(item: item, onTap: () => _details(item)),
-        ),
-    ],
-  );
-}
-
-class _AccessBanner extends StatelessWidget {
-  final StockAccessState? access;
-  final VoidCallback onRequest;
-  final VoidCallback onReceive;
-  final VoidCallback onDone;
-  const _AccessBanner({
-    required this.access,
-    required this.onRequest,
-    required this.onReceive,
-    required this.onDone,
-  });
-
-  String _label() {
-    if (access == null)
-      return 'You can view stock. To receive stock, ask the admin.';
-    switch (access!.status) {
-      case 'pending':
-        return 'Waiting for the admin’s approval, sent at ${_time(access!.requestedAt)}.';
-      case 'approved':
-        if (access!.expiresAt == null)
-          return 'You have stock access until the admin removes it.';
-        return 'You have stock access until ${_time(access!.expiresAt)} (${_remaining(access!.expiresAt!)} left).';
-      case 'denied':
-        return 'The admin did not approve your last request.';
-      case 'expired':
-        return 'Your stock access has ended because the time limit passed.';
-      default:
-        return 'Your stock access has ended${access!.revokedByName == null ? '' : ' — removed by ${access!.revokedByName}'}.';
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.all(14),
-    decoration: BoxDecoration(
-      color: access?.canReceive == true
-          ? empSuccessTint
-          : access?.status == 'pending'
-          ? empWarnTint
-          : Colors.white,
-      border: Border.all(color: empBorder),
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(
-              access?.canReceive == true
-                  ? Icons.check_circle_outline
-                  : Icons.lock_outline,
-              color: access?.canReceive == true ? empSuccess : empMuted,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _label(),
-                style: empSans(13.5, weight: FontWeight.w600, color: empInk),
-              ),
-            ),
-          ],
+        const SizedBox(height: 14),
+        TextField(
+          controller: _searchCtrl,
+          onChanged: (v) {
+            setState(() => _query = v);
+            _load(silent: true);
+          },
+          style: empSans(14, color: empInk),
+          decoration: empField('Search stock…').copyWith(
+            prefixIcon: const Icon(Icons.search, size: 20, color: empMuted),
+          ),
         ),
         const SizedBox(height: 10),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
+        Row(
           children: [
-            if (access?.canReceive == true) ...[
-              FilledButton(
-                onPressed: onReceive,
-                style: empPrimaryButton(height: 42),
-                child: const Text('Add stock'),
-              ),
-              OutlinedButton(onPressed: onDone, child: const Text("I'm done")),
-            ] else if (access?.status != 'pending')
-              FilledButton(
-                onPressed: onRequest,
-                style: empPrimaryButton(height: 42),
-                child: const Text('Request stock access'),
-              ),
+            _filterChip('All', 'all'),
+            const SizedBox(width: 8),
+            _filterChip('Low stock', 'low'),
+            const SizedBox(width: 8),
+            _filterChip('Expiring', 'expiring'),
           ],
         ),
+        const SizedBox(height: 12),
+        _list(),
       ],
-    ),
-  );
-}
+    );
+  }
 
-String _time(DateTime? value) => value == null
-    ? '—'
-    : '${value.toLocal().hour.toString().padLeft(2, '0')}:${value.toLocal().minute.toString().padLeft(2, '0')}';
-String _remaining(DateTime value) {
-  final d = value.difference(DateTime.now());
-  if (d.inHours > 0) return '${d.inHours}h ${d.inMinutes % 60}m';
-  return '${d.inMinutes.clamp(0, 59)}m';
-}
-
-class _StockRow extends StatelessWidget {
-  final StockItem item;
-  final VoidCallback onTap;
-  const _StockRow({required this.item, required this.onTap});
-  @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-      child: Row(
-        children: [
-          Expanded(
-            flex: 3,
-            child: Text(
-              item.name,
-              style: empSans(13.5, weight: FontWeight.w600, color: empInk),
-            ),
-          ),
-          Expanded(
-            flex: 2,
-            child: Text(item.category, style: empSans(12, color: empMuted)),
-          ),
-          Expanded(
-            child: Text(
-              '${empQty(item.quantity)} ${item.unit}',
-              style: empSans(13, color: empInk),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              empMk(item.retailPrice),
-              style: empSans(13, color: empInk),
-            ),
-          ),
-          Expanded(child: _status(item)),
-        ],
-      ),
-    ),
-  );
-}
-
-class _StockCard extends StatelessWidget {
-  final StockItem item;
-  final VoidCallback onTap;
-  const _StockCard({required this.item, required this.onTap});
-  @override
-  Widget build(BuildContext context) => InkWell(
-    onTap: onTap,
-    borderRadius: BorderRadius.circular(12),
-    child: EmpCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  item.name,
-                  style: empSans(15, weight: FontWeight.w700, color: empInk),
-                ),
-              ),
-              _status(item),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '${item.category} · ${item.unit}',
-            style: empSans(12, color: empMuted),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '${empQty(item.quantity)} available',
-                  style: empSans(13, color: empInk),
-                ),
-              ),
-              Text(
-                empMk(item.retailPrice),
-                style: empSans(13, weight: FontWeight.w600, color: empInk),
-              ),
-            ],
-          ),
-          if (item.prescription) ...[
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              color: empWarnTint,
-              child: Text(
-                'Prescription',
-                style: empSans(11, weight: FontWeight.w600, color: empWarn),
-              ),
-            ),
-          ],
-        ],
-      ),
-    ),
-  );
-}
-
-Widget _status(StockItem item) {
-  final text = item.isExpired && item.isOut
-      ? 'Expired'
-      : item.isOut
-      ? 'Out'
-      : item.isLow
-      ? 'Low'
-      : 'In stock';
-  final color = item.isOut
-      ? empDanger
-      : item.isLow
-      ? empWarn
-      : empSuccess;
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: .12),
-      borderRadius: BorderRadius.circular(6),
-    ),
-    child: Text(
-      text,
-      style: empSans(11, weight: FontWeight.w600, color: color),
-    ),
-  );
-}
-
-class _BatchTile extends StatelessWidget {
-  final StockBatchDetail batch;
-  const _BatchTile({required this.batch});
-  @override
-  Widget build(BuildContext context) {
-    final expiry = batch.expiryDate == null
-        ? 'Does not expire'
-        : 'Expires ${batch.expiryDate}';
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 9),
-      child: Container(
-        padding: const EdgeInsets.all(11),
-        decoration: BoxDecoration(
-          color: empBg,
-          borderRadius: BorderRadius.circular(9),
-        ),
+  Widget _accessBanner() {
+    if (_canReceive && _access.state == OwnAccessState.active) {
+      final until = _access.expiresAt == null
+          ? 'until the admin removes it'
+          : 'until ${_fmtTime(_access.expiresAt!)}';
+      return EmpCard(
         child: Row(
           children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(color: empSuccessTint, borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.verified_outlined, size: 19, color: empSuccess),
+            ),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Batch ${batch.batchNumber}',
-                    style: empSans(13, weight: FontWeight.w600, color: empInk),
-                  ),
-                  Text(
-                    '$expiry · ${empQty(batch.quantity)} left',
-                    style: empSans(12, color: empMuted),
-                  ),
+                  Text('You can receive stock', style: empSans(13.5, weight: FontWeight.w700, color: empInk)),
+                  Text('Access lasts $until.', style: empSans(12, color: empMuted)),
                 ],
               ),
             ),
-            Text(
-              empMk(batch.retailPrice),
-              style: empSans(12.5, weight: FontWeight.w600, color: empInk),
+            TextButton(
+              onPressed: _endAccess,
+              child: Text('I’m done', style: empSans(13, weight: FontWeight.w700, color: empPrimary)),
             ),
           ],
         ),
+      );
+    }
+    if (_access.state == OwnAccessState.pending) {
+      return EmpCard(
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(color: empWarnTint, borderRadius: BorderRadius.circular(10)),
+              child: const Icon(Icons.hourglass_top_outlined, size: 19, color: empWarn),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Request waiting', style: empSans(13.5, weight: FontWeight.w700, color: empInk)),
+                  Text('The admin hasn’t decided yet.', style: empSans(12, color: empMuted)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return EmpCard(
+      child: Row(
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(color: empPrimaryTint, borderRadius: BorderRadius.circular(10)),
+            child: const Icon(Icons.lock_outline, size: 19, color: empPrimary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Receiving needs permission', style: empSans(13.5, weight: FontWeight.w700, color: empInk)),
+                Text('Ask the admin when a delivery arrives.', style: empSans(12, color: empMuted)),
+              ],
+            ),
+          ),
+          FilledButton(
+            onPressed: _requestAccess,
+            style: empPrimaryButton(height: 40),
+            child: const Text('Request'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip(String label, String value) {
+    final active = _chip == value;
+    return ChoiceChip(
+      label: Text(label),
+      selected: active,
+      onSelected: (_) => setState(() => _chip = value),
+      selectedColor: empPrimary,
+      backgroundColor: empSurface,
+      side: BorderSide(color: active ? empPrimary : empBorder),
+      labelStyle: empSans(13, weight: FontWeight.w600, color: active ? Colors.white : empMuted),
+      showCheckmark: false,
+    );
+  }
+
+  Widget _list() {
+    final rows = _visible;
+    if (rows.isEmpty) {
+      return EmpEmpty(
+        icon: Icons.inventory_2_outlined,
+        message: _query.trim().isEmpty ? 'Nothing here for this filter.' : 'No stock found for “${_query.trim()}”.',
+      );
+    }
+    return EmpCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: List.generate(rows.length, (i) {
+          final r = rows[i];
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+            decoration: BoxDecoration(
+              border: i == rows.length - 1 ? null : const Border(bottom: BorderSide(color: empBorder)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(r.name, style: empSans(13.5, weight: FontWeight.w600, color: empInk)),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          if (r.low) ...[
+                            _pill('Low', empWarn, empWarnTint),
+                            const SizedBox(width: 6),
+                          ],
+                          if (r.expiring) ...[
+                            _pill('Expiring', empDanger, empDangerTint),
+                            const SizedBox(width: 6),
+                          ],
+                          Text('${empQty(r.qty)} ${r.unit} · ${empMk(r.retail)}',
+                              style: empSans(12, color: empMuted)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _pill(String label, Color fg, Color bg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+      child: Text(label, style: empSans(10.5, weight: FontWeight.w700, color: fg)),
+    );
+  }
+
+  String _fmtTime(DateTime dt) {
+    final l = dt.toLocal();
+    return '${l.day}/${l.month}/${l.year} ${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+Future<T?> _showStockSheet<T>(BuildContext context, {required WidgetBuilder builder}) {
+  final wide = MediaQuery.of(context).size.width >= empWideBreakpoint;
+  if (wide) {
+    return showDialog<T>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        clipBehavior: Clip.antiAlias,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 560),
+          child: SingleChildScrollView(child: builder(ctx)),
+        ),
+      ),
+    );
+  }
+  return showModalBottomSheet<T>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: builder,
+  );
+}
+
+class _ReasonSheet extends StatefulWidget {
+  @override
+  State<_ReasonSheet> createState() => _ReasonSheetState();
+}
+
+class _ReasonSheetState extends State<_ReasonSheet> {
+  final _ctrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return EmpSheetFrame(
+      title: 'Request stock access',
+      subtitle: 'Tell the admin why you need it.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _ctrl,
+            minLines: 2,
+            maxLines: 3,
+            style: empSans(14, color: empInk),
+            decoration: empField('Reason', hint: 'e.g. MSD delivery arrived'),
+          ),
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(_ctrl.text.trim()),
+            style: empPrimaryButton(),
+            child: const Text('Send request'),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _DeliveryDraft {
-  final String itemId;
-  final String itemName;
-  final String unit;
-  final quantity = TextEditingController();
-  final buying = TextEditingController();
-  final retail = TextEditingController();
-  final wholesale = TextEditingController();
-  final batch = TextEditingController();
+// ============================================================================
+// RECEIVE SHEET — delivery lines then one atomic receive_stock_delivery().
+// ============================================================================
+
+class _ReceiveLineForm {
+  CatalogOption? item;
+  final qtyCtrl = TextEditingController();
+  final batchCtrl = TextEditingController();
+  final buyCtrl = TextEditingController();
+  final retailCtrl = TextEditingController();
+  final wholeCtrl = TextEditingController();
   DateTime? expiry;
-  _DeliveryDraft({
-    required this.itemId,
-    required this.itemName,
-    required this.unit,
-  });
-  double get total =>
-      (double.tryParse(quantity.text) ?? 0) *
-      (double.tryParse(buying.text) ?? 0);
   void dispose() {
-    quantity.dispose();
-    buying.dispose();
-    retail.dispose();
-    wholesale.dispose();
-    batch.dispose();
+    qtyCtrl.dispose();
+    batchCtrl.dispose();
+    buyCtrl.dispose();
+    retailCtrl.dispose();
+    wholeCtrl.dispose();
   }
 }
 
-class _ReceiveStockPage extends StatefulWidget {
+class _ReceiveSheet extends StatefulWidget {
+  final CashierStockRepository repo;
   final String branchId;
-  final StockRepository repo;
-  final VoidCallback onDone;
-  final VoidCallback onCancel;
-  const _ReceiveStockPage({
-    required this.branchId,
-    required this.repo,
-    required this.onDone,
-    required this.onCancel,
-  });
+  const _ReceiveSheet({required this.repo, required this.branchId});
+
   @override
-  State<_ReceiveStockPage> createState() => _ReceiveStockPageState();
+  State<_ReceiveSheet> createState() => _ReceiveSheetState();
 }
 
-class _ReceiveStockPageState extends State<_ReceiveStockPage> {
-  final _invoice = TextEditingController();
-  final List<_DeliveryDraft> _lines = [];
-  List<Map<String, String>> _suppliers = [];
-  List<StockItem> _catalog = [];
-  String? _supplier;
-  DateTime _date = DateTime.now();
+class _ReceiveSheetState extends State<_ReceiveSheet> {
+  final List<_ReceiveLineForm> _lines = [_ReceiveLineForm()];
+  List<SupplierOption> _suppliers = [];
+  String? _supplierId;
+  final _invoiceCtrl = TextEditingController();
   bool _saving = false;
+  String? _formError;
 
   @override
   void initState() {
     super.initState();
-    _init();
+    _loadSuppliers();
   }
 
   @override
   void dispose() {
-    _invoice.dispose();
-    for (final l in _lines) l.dispose();
+    for (final l in _lines) {
+      l.dispose();
+    }
+    _invoiceCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _init() async {
+  Future<void> _loadSuppliers() async {
     try {
-      final r = await Future.wait([
-        widget.repo.fetchSuppliers(),
-        widget.repo.fetchItems(branchId: widget.branchId),
-      ]);
-      if (mounted)
-        setState(() {
-          _suppliers = r[0] as List<Map<String, String>>;
-          _catalog = r[1] as List<StockItem>;
-        });
-    } catch (e) {
-      if (mounted) empToast(context, e.toString(), error: true);
-    }
+      final s = await widget.repo.fetchSuppliers();
+      if (mounted) setState(() => _suppliers = s);
+    } catch (_) {}
   }
 
-  Future<void> _addLine() async {
-    final item = await showModalBottomSheet<StockItem>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _CatalogPicker(items: _catalog),
+  Future<void> _pickItem(_ReceiveLineForm line) async {
+    final picked = await _showStockSheet<CatalogOption>(
+      context,
+      builder: (_) => _ItemPickerSheet(repo: widget.repo),
     );
-    if (item != null)
-      setState(
-        () => _lines.add(
-          _DeliveryDraft(itemId: item.id, itemName: item.name, unit: item.unit),
-        ),
-      );
+    if (picked != null && mounted) setState(() => line.item = picked);
   }
 
-  double get _total => _lines.fold(
-    0,
-    (sum, l) =>
-        sum +
-        (double.tryParse(l.quantity.text) ?? 0) *
-            (double.tryParse(l.buying.text) ?? 0),
-  );
-
-  List<Widget> _lineWidgets() => [
-    for (int i = 0; i < _lines.length; i++)
-      _DeliveryLineCard(
-        line: _lines[i],
-        onRemove: () {
-          final line = _lines.removeAt(i);
-          line.dispose();
-          setState(() {});
-        },
-        onChanged: () => setState(() {}),
-      ),
-  ];
-
-  Future<void> _save() async {
-    if (_lines.isEmpty) {
-      empToast(context, 'Add at least one item.', error: true);
-      return;
-    }
-    final values = <DeliveryLine>[];
+  Future<void> _submit() async {
+    final parsed = <ReceiveLine>[];
     for (final l in _lines) {
-      final qty = double.tryParse(l.quantity.text);
-      final buy = double.tryParse(l.buying.text);
-      final retail = double.tryParse(l.retail.text);
-      if (qty == null ||
-          qty <= 0 ||
-          buy == null ||
-          buy < 0 ||
-          retail == null ||
-          retail < 0) {
-        empToast(
-          context,
-          'Check the quantity and prices for ${l.itemName}.',
-          error: true,
-        );
+      if (l.item == null) {
+        setState(() => _formError = 'Pick an item for every line.');
         return;
       }
-      if (l.expiry != null &&
-          l.expiry!.isBefore(
-            DateTime.now().subtract(const Duration(days: 1)),
-          )) {
-        empToast(context, 'Expiry date cannot be in the past.', error: true);
+      final qty = double.tryParse(l.qtyCtrl.text.trim());
+      final buy = double.tryParse(l.buyCtrl.text.trim());
+      final retail = double.tryParse(l.retailCtrl.text.trim());
+      final whole = l.wholeCtrl.text.trim().isEmpty ? null : double.tryParse(l.wholeCtrl.text.trim());
+      if (qty == null || qty <= 0 || buy == null || buy < 0 || retail == null || retail < 0) {
+        setState(() => _formError = 'Each line needs quantity, buying and retail prices.');
         return;
       }
-      values.add(
-        DeliveryLine(
-          itemId: l.itemId,
-          itemName: l.itemName,
-          unit: l.unit,
-          quantity: l.quantity.text,
-          buyingPrice: l.buying.text,
-          retailPrice: l.retail.text,
-          wholesalePrice: l.wholesale.text,
-          batchNumber: l.batch.text,
-          expiryDate: l.expiry,
-        ),
-      );
+      if (whole != null && whole < 0) {
+        setState(() => _formError = 'Wholesale prices cannot be negative.');
+        return;
+      }
+      String? exp;
+      if (l.expiry != null) {
+        exp = '${l.expiry!.year}-${l.expiry!.month.toString().padLeft(2, '0')}-${l.expiry!.day.toString().padLeft(2, '0')}';
+      }
+      parsed.add(ReceiveLine(
+        itemId: l.item!.id,
+        quantity: qty,
+        buyingPrice: buy,
+        retailPrice: retail,
+        wholesalePrice: whole,
+        expiryDate: exp,
+        batchNumber: l.batchCtrl.text,
+      ));
     }
-    setState(() => _saving = true);
+    setState(() {
+      _saving = true;
+      _formError = null;
+    });
     try {
       await widget.repo.receive(
         branchId: widget.branchId,
-        supplierId: _supplier,
-        invoiceNumber: _invoice.text,
-        purchaseDate: _date,
-        lines: values,
+        supplierId: _supplierId,
+        invoice: _invoiceCtrl.text,
+        lines: parsed,
       );
-      stockChanged.value++;
-      if (mounted) {
-        empToast(
-          context,
-          '${values.length} item${values.length == 1 ? '' : 's'} received, total ${empMk(_total)}.',
-        );
-        widget.onDone();
-      }
+      if (mounted) Navigator.of(context).pop(true);
     } on StockException catch (e) {
       if (mounted) {
-        setState(() => _saving = false);
-        empToast(context, e.message, error: true);
+        setState(() {
+          _saving = false;
+          _formError = e.message;
+        });
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final form = <Widget>[
-      DropdownButtonFormField<String?>(
-        value: _supplier,
-        decoration: empField('Supplier'),
-        items: [
-          const DropdownMenuItem(
-            value: null,
-            child: Text('No supplier / cash buy'),
+    return EmpSheetFrame(
+      title: 'Receive stock',
+      subtitle: 'Delivered items go straight onto the sales list.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: empBorder),
+              borderRadius: BorderRadius.circular(10),
+              color: Colors.white,
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String?>(
+                value: _supplierId,
+                isExpanded: true,
+                hint: Text('Supplier (optional)', style: empSans(13.5, color: empMuted)),
+                style: empSans(14, color: empInk),
+                items: [
+                  const DropdownMenuItem<String?>(value: null, child: Text('No supplier')),
+                  for (final s in _suppliers) DropdownMenuItem<String?>(value: s.id, child: Text(s.name)),
+                ],
+                onChanged: (v) => setState(() => _supplierId = v),
+              ),
+            ),
           ),
-          ..._suppliers.map(
-            (s) => DropdownMenuItem(value: s['id'], child: Text(s['name']!)),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _invoiceCtrl,
+            style: empSans(14, color: empInk),
+            decoration: empField('Invoice number (optional)'),
+          ),
+          const SizedBox(height: 14),
+          for (int i = 0; i < _lines.length; i++) ...[
+            _lineCard(i, _lines[i]),
+            const SizedBox(height: 10),
+          ],
+          OutlinedButton.icon(
+            onPressed: () => setState(() => _lines.add(_ReceiveLineForm())),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: empPrimary,
+              minimumSize: const Size(0, 44),
+              side: const BorderSide(color: empBorder),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add another item'),
+          ),
+          if (_formError != null) ...[
+            const SizedBox(height: 10),
+            Text(_formError!, style: empSans(12.5, weight: FontWeight.w600, color: empDanger)),
+          ],
+          const SizedBox(height: 14),
+          FilledButton(
+            onPressed: _saving ? null : _submit,
+            style: empPrimaryButton(),
+            child: _saving
+                ? const SizedBox(
+                    width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Text('Save delivery'),
           ),
         ],
-        onChanged: (v) => setState(() => _supplier = v),
-      ),
-      const SizedBox(height: 10),
-      TextField(
-        controller: _invoice,
-        decoration: empField('Invoice number (optional)'),
-      ),
-      const SizedBox(height: 10),
-      ListTile(
-        contentPadding: EdgeInsets.zero,
-        title: Text('Delivery date', style: empSans(13.5, color: empMuted)),
-        subtitle: Text(
-          '${_date.day} ${_date.month} ${_date.year}',
-          style: empSans(14, weight: FontWeight.w600, color: empInk),
-        ),
-        trailing: const Icon(Icons.calendar_today_outlined),
-        onTap: () async {
-          final d = await showDatePicker(
-            context: context,
-            initialDate: _date,
-            firstDate: DateTime(2020),
-            lastDate: DateTime.now(),
-          );
-          if (d != null) setState(() => _date = d);
-        },
-      ),
-      const SizedBox(height: 8),
-      ..._lineWidgets(),
-      OutlinedButton.icon(
-        onPressed: _addLine,
-        icon: const Icon(Icons.add),
-        label: const Text('Add item'),
-      ),
-    ];
-    return Scaffold(
-      backgroundColor: empBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(18, 14, 18, 8),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: widget.onCancel,
-                    icon: const Icon(Icons.arrow_back),
-                  ),
-                  Expanded(
-                    child: Text(
-                      'Add stock',
-                      style: empSans(
-                        21,
-                        weight: FontWeight.w700,
-                        color: empInk,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(18, 4, 18, 110),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 980),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: form,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            Container(
-              color: Colors.white,
-              padding: const EdgeInsets.fromLTRB(18, 10, 18, 10),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      '${_lines.length} item${_lines.length == 1 ? '' : 's'} · ${empMk(_total)}',
-                      style: empSans(
-                        14,
-                        weight: FontWeight.w700,
-                        color: empInk,
-                      ),
-                    ),
-                  ),
-                  FilledButton(
-                    onPressed: _saving ? null : _save,
-                    style: empPrimaryButton(height: 46),
-                    child: Text(_saving ? 'Saving…' : 'Add sellable stock'),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
-}
 
-class _DeliveryLineCard extends StatelessWidget {
-  final _DeliveryDraft line;
-  final VoidCallback onRemove;
-  final VoidCallback onChanged;
-  const _DeliveryLineCard({
-    required this.line,
-    required this.onRemove,
-    required this.onChanged,
-  });
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: EmpCard(
+  Widget _lineCard(int i, _ReceiveLineForm l) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: empBg,
+        border: Border.all(color: empBorder),
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
               Expanded(
-                child: Text(
-                  line.itemName,
-                  style: empSans(14, weight: FontWeight.w700, color: empInk),
+                child: Text(l.item?.name ?? 'Item ${i + 1}',
+                    style: empSans(14, weight: FontWeight.w700, color: empInk)),
+              ),
+              TextButton(
+                onPressed: () => _pickItem(l),
+                child: Text(l.item == null ? 'Pick item' : 'Change',
+                    style: empSans(13, weight: FontWeight.w700, color: empPrimary)),
+              ),
+              if (_lines.length > 1)
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 19, color: empDanger),
+                  onPressed: () => setState(() {
+                    l.dispose();
+                    _lines.removeAt(i);
+                  }),
                 ),
-              ),
-              IconButton(
-                onPressed: onRemove,
-                icon: const Icon(Icons.delete_outline, color: empDanger),
-              ),
             ],
           ),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
+          const SizedBox(height: 8),
+          Row(
             children: [
-              SizedBox(
-                width: 150,
+              Expanded(
                 child: TextField(
-                  controller: line.quantity,
-                  onChanged: (_) => onChanged(),
-                  keyboardType: TextInputType.number,
-                  decoration: empField('Quantity'),
+                  controller: l.qtyCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: empSans(14, color: empInk),
+                  decoration: empField('Qty'),
                 ),
               ),
-              SizedBox(
-                width: 170,
+              const SizedBox(width: 8),
+              Expanded(
                 child: TextField(
-                  controller: line.buying,
-                  onChanged: (_) => onChanged(),
-                  keyboardType: TextInputType.number,
-                  decoration: empField('Buying price'),
-                ),
-              ),
-              SizedBox(
-                width: 170,
-                child: TextField(
-                  controller: line.retail,
-                  keyboardType: TextInputType.number,
-                  decoration: empField('Retail price'),
-                ),
-              ),
-              SizedBox(
-                width: 170,
-                child: TextField(
-                  controller: line.wholesale,
-                  keyboardType: TextInputType.number,
-                  decoration: empField('Wholesale (optional)'),
-                ),
-              ),
-              SizedBox(
-                width: 170,
-                child: TextField(
-                  controller: line.batch,
-                  decoration: empField('Batch number'),
+                  controller: l.batchCtrl,
+                  style: empSans(14, color: empInk),
+                  decoration: empField('Batch no.'),
                 ),
               ),
             ],
@@ -1114,78 +755,130 @@ class _DeliveryLineCard extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              Text(
-                line.expiry == null
-                    ? 'No expiry date'
-                    : 'Expires ${line.expiry!.day}/${line.expiry!.month}/${line.expiry!.year}',
-                style: empSans(12.5, color: empMuted),
+              Expanded(
+                child: TextField(
+                  controller: l.buyCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: empSans(14, color: empInk),
+                  decoration: empField('Buying'),
+                ),
               ),
-              const Spacer(),
-              Text(
-                empMk(line.total),
-                style: empSans(13, weight: FontWeight.w700, color: empInk),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: l.retailCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: empSans(14, color: empInk),
+                  decoration: empField('Retail'),
+                ),
               ),
-              TextButton(
-                onPressed: () async {
-                  final d = await showDatePicker(
-                    context: context,
-                    initialDate: line.expiry ?? DateTime.now(),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime(2100),
-                  );
-                  if (d != null) {
-                    line.expiry = d;
-                    onChanged();
-                  }
-                },
-                child: const Text('Set expiry'),
+              const SizedBox(width: 8),
+              Expanded(
+                child: TextField(
+                  controller: l.wholeCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: empSans(14, color: empInk),
+                  decoration: empField('Wholesale?'),
+                ),
               ),
             ],
           ),
-          if ((double.tryParse(line.retail.text) ?? 0) <
-              (double.tryParse(line.buying.text) ?? 0))
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                'Retail price is below buying price.',
-                style: empSans(12, color: empWarn),
-              ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final now = DateTime.now();
+              final d = await showDatePicker(
+                context: context,
+                initialDate: l.expiry ?? now,
+                firstDate: DateTime(now.year, now.month, now.day),
+                lastDate: DateTime(now.year + 10),
+              );
+              if (d != null && mounted) setState(() => l.expiry = d);
+            },
+            style: OutlinedButton.styleFrom(
+              foregroundColor: empInk,
+              minimumSize: const Size(0, 44),
+              side: const BorderSide(color: empBorder),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
             ),
+            icon: const Icon(Icons.calendar_month_outlined, size: 18),
+            label: Text(l.expiry == null
+                ? 'Expiry (optional)'
+                : '${l.expiry!.day}/${l.expiry!.month}/${l.expiry!.year} — tap to change'),
+          ),
         ],
       ),
-    ),
-  );
+    );
+  }
 }
 
-class _CatalogPicker extends StatefulWidget {
-  final List<StockItem> items;
-  const _CatalogPicker({required this.items});
+class _ItemPickerSheet extends StatefulWidget {
+  final CashierStockRepository repo;
+  const _ItemPickerSheet({required this.repo});
+
   @override
-  State<_CatalogPicker> createState() => _CatalogPickerState();
+  State<_ItemPickerSheet> createState() => _ItemPickerSheetState();
 }
 
-class _CatalogPickerState extends State<_CatalogPicker> {
-  String q = '';
+class _ItemPickerSheetState extends State<_ItemPickerSheet> {
+  final _ctrl = TextEditingController();
+  List<CatalogOption> _results = [];
+  bool _searching = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _search(String q) async {
+    setState(() => _searching = true);
+    try {
+      final res = await widget.repo.searchCatalog(q);
+      if (!mounted || _ctrl.text != q) return;
+      setState(() {
+        _results = res;
+        _searching = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _searching = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final rows = widget.items
-        .where((i) => i.name.toLowerCase().contains(q.toLowerCase()))
-        .toList();
     return EmpSheetFrame(
-      title: 'Add catalog item',
+      title: 'Pick item',
+      subtitle: 'Only products from the catalog.',
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TextField(
-            onChanged: (v) => setState(() => q = v),
-            decoration: empField('Search item'),
+            controller: _ctrl,
+            onChanged: _search,
+            autofocus: true,
+            style: empSans(14, color: empInk),
+            decoration: empField('Type a drug name…').copyWith(
+              prefixIcon: const Icon(Icons.search, size: 20, color: empMuted),
+            ),
           ),
           const SizedBox(height: 8),
-          for (final item in rows.take(30))
-            ListTile(
-              title: Text(item.name),
-              subtitle: Text('${item.category} · ${item.unit}'),
-              onTap: () => Navigator.pop(context, item),
-            ),
+          if (_searching)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12),
+              child: Center(
+                child: SizedBox(
+                    width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: empPrimary)),
+              ),
+            )
+          else
+            for (final c in _results)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(c.name, style: empSans(14, weight: FontWeight.w600, color: empInk)),
+                trailing: const Icon(Icons.chevron_right, color: empMuted),
+                onTap: () => Navigator.of(context).pop(c),
+              ),
         ],
       ),
     );

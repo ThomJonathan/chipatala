@@ -1902,3 +1902,31 @@ GRANT EXECUTE ON FUNCTION receive_stock_delivery(uuid, uuid, text, date, jsonb) 
 
 
                                              
+-- ----------------------------------------------------------------------------
+-- SELF-SERVICE PROFILE: cashiers can fix their own name/phone only.
+-- Staff cannot UPDATE users directly (admin-only policies), so this
+-- SECURITY DEFINER function updates exactly two columns for auth.uid().
+-- Role, branch and active status can never change through it.
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION update_own_profile(p_full_name text, p_phone text DEFAULT NULL)
+RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_uid uuid := auth.uid();
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'You must be signed in.';
+  END IF;
+  IF trim(COALESCE(p_full_name, '')) = '' THEN
+    RAISE EXCEPTION 'Full name is required.';
+  END IF;
+  UPDATE users
+  SET full_name = trim(p_full_name),
+      phone = NULLIF(trim(COALESCE(p_phone, '')), '')
+  WHERE id = v_uid AND is_active;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Your account was not found.'; END IF;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION update_own_profile(text, text) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION update_own_profile(text, text) TO authenticated;

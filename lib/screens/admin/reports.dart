@@ -6,8 +6,8 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
+import '../../core/downloads.dart';
 import 'adminui.dart';
 import 'reportsRepo.dart';
 
@@ -48,13 +48,27 @@ String _compact(double v) {
   return v.round().toString();
 }
 
-String _fmtQty(double q) => q.toStringAsFixed(q.truncateToDouble() == q ? 0 : 2);
+String _fmtQty(double q) =>
+    q.toStringAsFixed(q.truncateToDouble() == q ? 0 : 2);
 
 String _fmtDate(String? raw) {
   if (raw == null || raw.isEmpty) return '—';
   try {
     final d = DateTime.parse(raw).toLocal();
-    const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const m = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return '${d.day} ${m[d.month - 1]} ${d.year}';
   } catch (_) {
     return raw;
@@ -117,7 +131,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
       setState(() {
         _branches = branches;
         _bundle = results[0] as PeriodBundle;
-        final debts = results[1] as ({List<CustomerDebt> customers, List<SupplierDebt> suppliers});
+        final debts =
+            results[1]
+                as ({
+                  List<CustomerDebt> customers,
+                  List<SupplierDebt> suppliers,
+                });
         _customers = debts.customers;
         _suppliers = debts.suppliers;
         _loading = false;
@@ -143,7 +162,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
   double get _expenses => _bundle.expenses.fold(0.0, (s, r) => s + r.amount);
   double get _net => _gross - _expenses;
 
-  Map<String, String> get _branchNames => {for (final b in _branches) b.id: b.name};
+  Map<String, String> get _branchNames => {
+    for (final b in _branches) b.id: b.name,
+  };
 
   // ---- Filter actions ----------------------------------------------------------
 
@@ -178,7 +199,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
           context: context,
           firstDate: DateTime(2020),
           lastDate: now,
-          initialDateRange: DateTimeRange(start: now.subtract(const Duration(days: 29)), end: now),
+          initialDateRange: DateTimeRange(
+            start: now.subtract(const Duration(days: 29)),
+            end: now,
+          ),
         );
         if (r == null) return;
         setState(() => _period = ReportPeriod.custom(r.start, r.end));
@@ -237,7 +261,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Text('How many years?', style: sans(16, weight: FontWeight.w700, color: kInk)),
+        title: Text(
+          'How many years?',
+          style: sans(16, weight: FontWeight.w700, color: kInk),
+        ),
         content: TextField(
           controller: ctrl,
           keyboardType: TextInputType.number,
@@ -247,7 +274,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Cancel', style: sans(13.5, weight: FontWeight.w600, color: kInkMuted)),
+            child: Text(
+              'Cancel',
+              style: sans(13.5, weight: FontWeight.w600, color: kInkMuted),
+            ),
           ),
           FilledButton(
             onPressed: () {
@@ -272,7 +302,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   /// Builds the CSV for the current tab (shared by CSV + PDF exports).
-  ({String tab, String title, List<String> headers, List<List<String>> rows, List<String> summary}) _buildExport() {
+  ({
+    String tab,
+    String title,
+    List<String> headers,
+    List<List<String>> rows,
+    List<String> summary,
+  })
+  _buildExport() {
     final branchSales = aggregateBranchSales(_bundle.sales);
     switch (_tab) {
       case 0:
@@ -281,7 +318,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
           title: 'Sales report',
           headers: const ['Branch', 'Transactions', 'Revenue (MK)'],
           rows: [
-            for (final b in branchSales) [b.branchName, '${b.transactions}', '${b.revenue.round()}'],
+            for (final b in branchSales)
+              [b.branchName, '${b.transactions}', '${b.revenue.round()}'],
           ],
           summary: [
             'Transactions: ${_bundle.sales.length}',
@@ -289,14 +327,35 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ],
         );
       case 1:
-        final profit = buildProfit(_bundle.saleItems, _bundle.expenses, _branchNamesForProfit(), _bundle.stockProfitByBranch);
+        final profit = buildProfit(
+          _bundle.saleItems,
+          _bundle.expenses,
+          _branchNamesForProfit(),
+          _bundle.stockProfitByBranch,
+        );
         return (
           tab: 'profit',
           title: 'Profit report',
-          headers: const ['Branch', 'Revenue', 'COGS', 'Gross profit', 'Expenses', 'Net profit', 'Profit in stock'],
+          headers: const [
+            'Branch',
+            'Revenue',
+            'COGS',
+            'Gross profit',
+            'Expenses',
+            'Net profit',
+            'Profit in stock',
+          ],
           rows: [
             for (final p in profit)
-              [p.branchName, '${p.revenue.round()}', '${p.cogs.round()}', '${p.gross.round()}', '${p.expenses.round()}', '${p.net.round()}', '${p.stockProfit.round()}'],
+              [
+                p.branchName,
+                '${p.revenue.round()}',
+                '${p.cogs.round()}',
+                '${p.gross.round()}',
+                '${p.expenses.round()}',
+                '${p.net.round()}',
+                '${p.stockProfit.round()}',
+              ],
           ],
           summary: [
             'Revenue: MK ${_fmtMk(_revenue)}',
@@ -310,23 +369,51 @@ class _ReportsScreenState extends State<ReportsScreen> {
         return (
           tab: 'best_sellers',
           title: 'Best sellers',
-          headers: const ['Item', 'Qty sold', 'Revenue (MK)', 'Profit (MK)', 'Times sold'],
+          headers: const [
+            'Item',
+            'Qty sold',
+            'Revenue (MK)',
+            'Profit (MK)',
+            'Times sold',
+          ],
           rows: [
             for (final b in best)
-              [b.itemName, _fmtQty(b.qty), '${b.revenue.round()}', '${b.profit.round()}', '${b.times}'],
+              [
+                b.itemName,
+                _fmtQty(b.qty),
+                '${b.revenue.round()}',
+                '${b.profit.round()}',
+                '${b.times}',
+              ],
           ],
-          summary: ['Ranked by ${_rankLabel(_rankBy).toLowerCase()} · ${best.length} items'],
+          summary: [
+            'Ranked by ${_rankLabel(_rankBy).toLowerCase()} · ${best.length} items',
+          ],
         );
       case 3:
         return (
           tab: 'expenses',
           title: 'Expenses report',
-          headers: const ['Date', 'Category', 'Branch', 'Description', 'Amount (MK)'],
+          headers: const [
+            'Date',
+            'Category',
+            'Branch',
+            'Description',
+            'Amount (MK)',
+          ],
           rows: [
             for (final e in _bundle.expenses)
-              [e.expenseDate, e.category, e.branchName, e.description, '${e.amount.round()}'],
+              [
+                e.expenseDate,
+                e.category,
+                e.branchName,
+                e.description,
+                '${e.amount.round()}',
+              ],
           ],
-          summary: ['Total: MK ${_fmtMk(_expenses)} across ${_bundle.expenses.length} records'],
+          summary: [
+            'Total: MK ${_fmtMk(_expenses)} across ${_bundle.expenses.length} records',
+          ],
         );
       default:
         return (
@@ -334,8 +421,15 @@ class _ReportsScreenState extends State<ReportsScreen> {
           title: 'Debts report',
           headers: const ['Type', 'Name', 'Branch', 'Balance (MK)'],
           rows: [
-            for (final c in _customers) ['Customer', c.name, c.branchName, '${c.balance.round()}'],
-            for (final s in _suppliers) ['Supplier', s.supplierName, 'All branches', '${s.amountOwed.round()}'],
+            for (final c in _customers)
+              ['Customer', c.name, c.branchName, '${c.balance.round()}'],
+            for (final s in _suppliers)
+              [
+                'Supplier',
+                s.supplierName,
+                'All branches',
+                '${s.amountOwed.round()}',
+              ],
           ],
           summary: [
             'Customers owe: MK ${_fmtMk(_customers.fold(0.0, (s, c) => s + c.balance))}',
@@ -365,10 +459,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
       for (final r in ex.rows) {
         buf.writeln(r.map(_csvCell).join(','));
       }
-      final path = await FileSaver.instance.saveFile(
+      final path = await saveDownload(
         name: _fileBase(ex.tab),
         bytes: Uint8List.fromList(utf8.encode(buf.toString())),
-        fileExtension: 'csv',
+        extension: 'csv',
         mimeType: MimeType.csv,
       );
       if (mounted) showToast(context, '${ex.rows.length} rows saved to $path');
@@ -395,43 +489,87 @@ class _ReportsScreenState extends State<ReportsScreen> {
           header: (_) => pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              pw.Text('TUMAINI INVESTMENTS',
-                  style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold, color: brandBlue)),
-              pw.Text(ex.title, style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+              pw.Text(
+                'TUMAINI INVESTMENTS',
+                style: pw.TextStyle(
+                  fontSize: 11,
+                  fontWeight: pw.FontWeight.bold,
+                  color: brandBlue,
+                ),
+              ),
+              pw.Text(
+                ex.title,
+                style: pw.TextStyle(
+                  fontSize: 20,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
               pw.SizedBox(height: 2),
-              pw.Text('$_scopeName · ${_period.describe()}',
-                  style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+              pw.Text(
+                '$_scopeName · ${_period.describe()}',
+                style: const pw.TextStyle(
+                  fontSize: 10,
+                  color: PdfColors.grey700,
+                ),
+              ),
               pw.Divider(color: gold, thickness: 2),
             ],
           ),
           footer: (ctx) => pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
-              pw.Text('Generated ${now.day}/${now.month}/${now.year}',
-                  style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
-              pw.Text('Page ${ctx.pageNumber}/${ctx.pagesCount}',
-                  style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600)),
+              pw.Text(
+                'Generated ${now.day}/${now.month}/${now.year}',
+                style: const pw.TextStyle(
+                  fontSize: 9,
+                  color: PdfColors.grey600,
+                ),
+              ),
+              pw.Text(
+                'Page ${ctx.pageNumber}/${ctx.pagesCount}',
+                style: const pw.TextStyle(
+                  fontSize: 9,
+                  color: PdfColors.grey600,
+                ),
+              ),
             ],
           ),
           build: (_) => [
             pw.Wrap(
               spacing: 12,
               runSpacing: 6,
-              children: [for (final s in ex.summary) pw.Text(s, style: const pw.TextStyle(fontSize: 10))],
+              children: [
+                for (final s in ex.summary)
+                  pw.Text(s, style: const pw.TextStyle(fontSize: 10)),
+              ],
             ),
             pw.SizedBox(height: 12),
             pw.TableHelper.fromTextArray(
               headers: ex.headers,
               data: ex.rows,
-              headerStyle: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.white),
-              headerDecoration: const pw.BoxDecoration(color: PdfColors.blue900),
+              headerStyle: pw.TextStyle(
+                fontSize: 9,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.white,
+              ),
+              headerDecoration: const pw.BoxDecoration(
+                color: PdfColors.blue900,
+              ),
               cellStyle: const pw.TextStyle(fontSize: 9),
-              oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+              oddRowDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey100,
+              ),
             ),
           ],
         ),
       );
-      await Printing.sharePdf(bytes: await doc.save(), filename: '${_fileBase(ex.tab)}.pdf');
+      final path = await saveDownload(
+        name: _fileBase(ex.tab),
+        bytes: await doc.save(),
+        extension: 'pdf',
+        mimeType: MimeType.pdf,
+      );
+      if (mounted) showToast(context, 'PDF saved to $path');
     } catch (e) {
       if (mounted) showToast(context, 'PDF failed: $e', error: true);
     } finally {
@@ -484,7 +622,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
               final wide = c.maxWidth >= kWideContentBreakpoint;
               return SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(wide ? 32 : 18, wide ? 28 : 12, wide ? 32 : 18, 96),
+                padding: EdgeInsets.fromLTRB(
+                  wide ? 32 : 18,
+                  wide ? 28 : 12,
+                  wide ? 32 : 18,
+                  96,
+                ),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1080),
@@ -493,7 +636,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       children: [
                         PageTitle(
                           title: 'Reports',
-                          subtitle: _loading ? 'Loading…' : '$_scopeName · ${_period.describe()}',
+                          subtitle: _loading
+                              ? 'Loading…'
+                              : '$_scopeName · ${_period.describe()}',
                           trailing: _exporting
                               ? const SizedBox(
                                   width: 44,
@@ -502,7 +647,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                     child: SizedBox(
                                       width: 20,
                                       height: 20,
-                                      child: CircularProgressIndicator(strokeWidth: 2, color: kPrimary),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: kPrimary,
+                                      ),
                                     ),
                                   ),
                                 )
@@ -512,14 +660,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                     OutlinedButton.icon(
                                       onPressed: _loading ? null : _exportCsv,
                                       style: outlineButtonStyle(height: 44),
-                                      icon: const Icon(Icons.table_chart_outlined, size: 18),
+                                      icon: const Icon(
+                                        Icons.table_chart_outlined,
+                                        size: 18,
+                                      ),
                                       label: const Text('CSV'),
                                     ),
                                     const SizedBox(width: 8),
                                     OutlinedButton.icon(
                                       onPressed: _loading ? null : _exportPdf,
                                       style: outlineButtonStyle(height: 44),
-                                      icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                                      icon: const Icon(
+                                        Icons.picture_as_pdf_outlined,
+                                        size: 18,
+                                      ),
                                       label: const Text('PDF'),
                                     ),
                                   ],
@@ -566,13 +720,26 @@ class _ReportsScreenState extends State<ReportsScreen> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String?>(
           value: _branchId,
-          icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: kInkMuted),
+          icon: const Icon(
+            Icons.keyboard_arrow_down,
+            size: 18,
+            color: kInkMuted,
+          ),
           style: sans(13.5, weight: FontWeight.w500, color: kInk),
-          hint: Text('All Branches', style: sans(13.5, weight: FontWeight.w500, color: kInk)),
+          hint: Text(
+            'All Branches',
+            style: sans(13.5, weight: FontWeight.w500, color: kInk),
+          ),
           onChanged: _onBranchChanged,
           items: [
-            const DropdownMenuItem<String?>(value: null, child: Text('All Branches')),
-            ..._branches.map((b) => DropdownMenuItem<String?>(value: b.id, child: Text(b.name))),
+            const DropdownMenuItem<String?>(
+              value: null,
+              child: Text('All Branches'),
+            ),
+            ..._branches.map(
+              (b) =>
+                  DropdownMenuItem<String?>(value: b.id, child: Text(b.name)),
+            ),
           ],
         ),
       ),
@@ -590,7 +757,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: _periodValue,
-          icon: const Icon(Icons.calendar_month_outlined, size: 18, color: kInkMuted),
+          icon: const Icon(
+            Icons.calendar_month_outlined,
+            size: 18,
+            color: kInkMuted,
+          ),
           style: sans(13.5, weight: FontWeight.w500, color: kInk),
           onChanged: (v) {
             if (v != null) _pickPeriod(v);
@@ -618,7 +789,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
               color: kPrimaryTint,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Text(_period.describe(), style: sans(12.5, weight: FontWeight.w600, color: kPrimary)),
+            child: Text(
+              _period.describe(),
+              style: sans(12.5, weight: FontWeight.w600, color: kPrimary),
+            ),
           ),
         ],
       );
@@ -633,9 +807,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
               border: Border.all(color: kBorder),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Text('$_scopeName · ${_period.label()}',
-                style: sans(12.5, weight: FontWeight.w600, color: kInk),
-                overflow: TextOverflow.ellipsis),
+            child: Text(
+              '$_scopeName · ${_period.label()}',
+              style: sans(12.5, weight: FontWeight.w600, color: kInk),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ),
         const SizedBox(width: 10),
@@ -657,7 +833,9 @@ class _ReportsScreenState extends State<ReportsScreen> {
             }
             if (res.periodAction != null) {
               // Period pickers need a live context — run after the sheet closes.
-              WidgetsBinding.instance.addPostFrameCallback((_) => _pickPeriod(res.periodAction!));
+              WidgetsBinding.instance.addPostFrameCallback(
+                (_) => _pickPeriod(res.periodAction!),
+              );
               return;
             }
             if (needReload) await _load();
@@ -692,9 +870,24 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Widget _summaryCards(bool wide) {
     final cards = [
-      _SummaryCard(label: 'Revenue', value: 'MK ${_fmtMk(_revenue)}', sub: '${_bundle.sales.length} sales', icon: Icons.payments_outlined),
-      _SummaryCard(label: 'Gross profit', value: 'MK ${_fmtMk(_gross)}', sub: 'sales minus cost', icon: Icons.trending_up_outlined),
-      _SummaryCard(label: 'Expenses', value: 'MK ${_fmtMk(_expenses)}', sub: '${_bundle.expenses.length} records', icon: Icons.receipt_long_outlined),
+      _SummaryCard(
+        label: 'Revenue',
+        value: 'MK ${_fmtMk(_revenue)}',
+        sub: '${_bundle.sales.length} sales',
+        icon: Icons.payments_outlined,
+      ),
+      _SummaryCard(
+        label: 'Gross profit',
+        value: 'MK ${_fmtMk(_gross)}',
+        sub: 'sales minus cost',
+        icon: Icons.trending_up_outlined,
+      ),
+      _SummaryCard(
+        label: 'Expenses',
+        value: 'MK ${_fmtMk(_expenses)}',
+        sub: '${_bundle.expenses.length} records',
+        icon: Icons.receipt_long_outlined,
+      ),
       _SummaryCard(
         label: 'Net profit',
         value: 'MK ${_fmtMk(_net)}',
@@ -733,7 +926,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
       child: Row(
         children: [
           for (int i = 0; i < labels.length; i++) ...[
-            FilterPill(label: labels[i], selected: _tab == i, onTap: () => setState(() => _tab = i)),
+            FilterPill(
+              label: labels[i],
+              selected: _tab == i,
+              onTap: () => setState(() => _tab = i),
+            ),
             if (i != labels.length - 1) const SizedBox(width: 8),
           ],
         ],
@@ -760,7 +957,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
           onRank: (r) => setState(() => _rankBy = r),
         );
       case 3:
-        return _ExpensesTab(bundle: _bundle, wide: wide, showBranch: _branchId == null);
+        return _ExpensesTab(
+          bundle: _bundle,
+          wide: wide,
+          showBranch: _branchId == null,
+        );
       default:
         return _DebtsTab(
           customers: _filteredCustomers(),
@@ -843,18 +1044,34 @@ class _SummaryCard extends StatelessWidget {
               color: highlight ? Colors.white24 : kPrimaryTint,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Icon(icon, size: 16, color: highlight ? Colors.white : kPrimary),
+            child: Icon(
+              icon,
+              size: 16,
+              color: highlight ? Colors.white : kPrimary,
+            ),
           ),
           const SizedBox(height: 10),
-          Text(value,
-              style: mono(17,
-                  weight: FontWeight.w700,
-                  color: highlight ? Colors.white : (alert ? kDanger : kInk))),
+          Text(
+            value,
+            style: mono(
+              17,
+              weight: FontWeight.w700,
+              color: highlight ? Colors.white : (alert ? kDanger : kInk),
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(label,
-              style: sans(11.5,
-                  weight: FontWeight.w600, color: highlight ? Colors.white70 : kInkMuted)),
-          Text(sub, style: sans(10.5, color: highlight ? Colors.white70 : kInkMuted)),
+          Text(
+            label,
+            style: sans(
+              11.5,
+              weight: FontWeight.w600,
+              color: highlight ? Colors.white70 : kInkMuted,
+            ),
+          ),
+          Text(
+            sub,
+            style: sans(10.5, color: highlight ? Colors.white70 : kInkMuted),
+          ),
         ],
       ),
     );
@@ -872,7 +1089,10 @@ class _TrendChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maxY = points.fold(0.0, (m, p) => p.value > m ? p.value : m);
-    final double interval = (points.length / 6).ceilToDouble().clamp(1, 1000).toDouble();
+    final double interval = (points.length / 6)
+        .ceilToDouble()
+        .clamp(1, 1000)
+        .toDouble();
     return SizedBox(
       height: 230,
       child: LineChart(
@@ -880,18 +1100,28 @@ class _TrendChart extends StatelessWidget {
           minY: 0,
           maxY: maxY <= 0 ? 10.0 : maxY * 1.15,
           gridData: FlGridData(show: true, drawVerticalLine: false),
-          borderData: FlBorderData(show: true, border: Border.all(color: kBorder)),
+          borderData: FlBorderData(
+            show: true,
+            border: Border.all(color: kBorder),
+          ),
           lineTouchData: const LineTouchData(enabled: true),
           titlesData: FlTitlesData(
             show: true,
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
             leftTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 46,
-                getTitlesWidget: (v, _) => Text(_compact(v),
-                    style: sans(10, color: kInkMuted), textAlign: TextAlign.right),
+                getTitlesWidget: (v, _) => Text(
+                  _compact(v),
+                  style: sans(10, color: kInkMuted),
+                  textAlign: TextAlign.right,
+                ),
               ),
             ),
             bottomTitles: AxisTitles(
@@ -901,10 +1131,14 @@ class _TrendChart extends StatelessWidget {
                 interval: interval,
                 getTitlesWidget: (v, _) {
                   final i = v.round();
-                  if (i < 0 || i >= points.length) return const SizedBox.shrink();
+                  if (i < 0 || i >= points.length)
+                    return const SizedBox.shrink();
                   return Padding(
                     padding: const EdgeInsets.only(top: 6),
-                    child: Text(points[i].label, style: sans(10, color: kInkMuted)),
+                    child: Text(
+                      points[i].label,
+                      style: sans(10, color: kInkMuted),
+                    ),
                   );
                 },
               ),
@@ -912,13 +1146,19 @@ class _TrendChart extends StatelessWidget {
           ),
           lineBarsData: [
             LineChartBarData(
-              spots: [for (int i = 0; i < points.length; i++) FlSpot(i.toDouble(), points[i].value)],
+              spots: [
+                for (int i = 0; i < points.length; i++)
+                  FlSpot(i.toDouble(), points[i].value),
+              ],
               isCurved: true,
               color: kPrimary,
               barWidth: 3,
               isStrokeCapRound: true,
               dotData: const FlDotData(show: false),
-              belowBarData: BarAreaData(show: true, color: kPrimary.withValues(alpha: 0.12)),
+              belowBarData: BarAreaData(
+                show: true,
+                color: kPrimary.withValues(alpha: 0.12),
+              ),
             ),
           ],
         ),
@@ -950,14 +1190,21 @@ class _BranchBars extends StatelessWidget {
             borderData: FlBorderData(show: false),
             titlesData: FlTitlesData(
               show: true,
-              topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-              rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+              topTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
+              rightTitles: const AxisTitles(
+                sideTitles: SideTitles(showTitles: false),
+              ),
               leftTitles: AxisTitles(
                 sideTitles: SideTitles(
                   showTitles: true,
                   reservedSize: 46,
-                  getTitlesWidget: (v, _) => Text(_compact(v),
-                      style: sans(10, color: kInkMuted), textAlign: TextAlign.right),
+                  getTitlesWidget: (v, _) => Text(
+                    _compact(v),
+                    style: sans(10, color: kInkMuted),
+                    textAlign: TextAlign.right,
+                  ),
                 ),
               ),
               bottomTitles: AxisTitles(
@@ -966,7 +1213,8 @@ class _BranchBars extends StatelessWidget {
                   reservedSize: 36,
                   getTitlesWidget: (v, _) {
                     final i = v.round();
-                    if (i < 0 || i >= shown.length) return const SizedBox.shrink();
+                    if (i < 0 || i >= shown.length)
+                      return const SizedBox.shrink();
                     final name = shown[i].branchName.split(' ').first;
                     return Padding(
                       padding: const EdgeInsets.only(top: 6),
@@ -989,7 +1237,9 @@ class _BranchBars extends StatelessWidget {
                       toY: shown[i].revenue,
                       color: i == 0 ? const Color(0xFFC9A227) : kPrimary,
                       width: 22,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(5)),
+                      borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(5),
+                      ),
                     ),
                   ],
                 ),
@@ -1009,7 +1259,11 @@ class _SalesTab extends StatelessWidget {
   final PeriodBundle bundle;
   final ReportPeriod period;
   final bool wide;
-  const _SalesTab({required this.bundle, required this.period, required this.wide});
+  const _SalesTab({
+    required this.bundle,
+    required this.period,
+    required this.wide,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1017,30 +1271,38 @@ class _SalesTab extends StatelessWidget {
     final trend = buildTrend(bundle.sales, period);
     final hasTrend = trend.any((p) => p.value > 0);
     final chartCard = (String title, Widget child) => Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: kBorder),
-            borderRadius: BorderRadius.circular(12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: kBorder),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: sans(13.5, weight: FontWeight.w700, color: kInk),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: sans(13.5, weight: FontWeight.w700, color: kInk)),
-              const SizedBox(height: 12),
-              child,
-            ],
-          ),
-        );
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
 
     final children = <Widget>[
-      chartCard('Sales trend · ${period.describe()}',
-          hasTrend ? _TrendChart(points: trend) : _chartEmpty('No sales in this period.')),
       chartCard(
-          'Revenue by branch',
-          branchSales.isEmpty
-              ? _chartEmpty('No sales in this period.')
-              : _BranchBars(branches: branchSales)),
+        'Sales trend · ${period.describe()}',
+        hasTrend
+            ? _TrendChart(points: trend)
+            : _chartEmpty('No sales in this period.'),
+      ),
+      chartCard(
+        'Revenue by branch',
+        branchSales.isEmpty
+            ? _chartEmpty('No sales in this period.')
+            : _BranchBars(branches: branchSales),
+      ),
     ];
 
     return Column(
@@ -1063,7 +1325,10 @@ class _SalesTab extends StatelessWidget {
           children[1],
         ],
         const SizedBox(height: 16),
-        Text('Branches · highest first', style: sans(13, weight: FontWeight.w600, color: kInkMuted)),
+        Text(
+          'Branches · highest first',
+          style: sans(13, weight: FontWeight.w600, color: kInkMuted),
+        ),
         const SizedBox(height: 8),
         if (branchSales.isEmpty)
           const EmptyState(
@@ -1086,13 +1351,25 @@ class _SalesTab extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(b.branchName, style: sans(13.5, weight: FontWeight.w600, color: kInk)),
-                        Text('${b.transactions} ${b.transactions == 1 ? 'sale' : 'sales'}',
-                            style: sans(11.5, color: kInkMuted)),
+                        Text(
+                          b.branchName,
+                          style: sans(
+                            13.5,
+                            weight: FontWeight.w600,
+                            color: kInk,
+                          ),
+                        ),
+                        Text(
+                          '${b.transactions} ${b.transactions == 1 ? 'sale' : 'sales'}',
+                          style: sans(11.5, color: kInkMuted),
+                        ),
                       ],
                     ),
                   ),
-                  Text('MK ${_fmtMk(b.revenue)}', style: mono(14, weight: FontWeight.w700, color: kInk)),
+                  Text(
+                    'MK ${_fmtMk(b.revenue)}',
+                    style: mono(14, weight: FontWeight.w700, color: kInk),
+                  ),
                 ],
               ),
             ),
@@ -1105,7 +1382,9 @@ class _SalesTab extends StatelessWidget {
   Widget _chartEmpty(String msg) {
     return SizedBox(
       height: 120,
-      child: Center(child: Text(msg, style: sans(12.5, color: kInkMuted))),
+      child: Center(
+        child: Text(msg, style: sans(12.5, color: kInkMuted)),
+      ),
     );
   }
 }
@@ -1128,7 +1407,12 @@ class _ProfitTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = buildProfit(bundle.saleItems, bundle.expenses, branchNames, bundle.stockProfitByBranch);
+    final rows = buildProfit(
+      bundle.saleItems,
+      bundle.expenses,
+      branchNames,
+      bundle.stockProfitByBranch,
+    );
     if (rows.isEmpty) {
       return const EmptyState(
         icon: Icons.account_balance_outlined,
@@ -1152,9 +1436,20 @@ class _ProfitTab extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Expanded(child: Text(p.branchName, style: sans(14, weight: FontWeight.w700, color: kInk))),
-                    Text('MK ${_fmtMk(p.net)}',
-                        style: mono(14, weight: FontWeight.w700, color: p.net < 0 ? kDanger : kSuccess)),
+                    Expanded(
+                      child: Text(
+                        p.branchName,
+                        style: sans(14, weight: FontWeight.w700, color: kInk),
+                      ),
+                    ),
+                    Text(
+                      'MK ${_fmtMk(p.net)}',
+                      style: mono(
+                        14,
+                        weight: FontWeight.w700,
+                        color: p.net < 0 ? kDanger : kSuccess,
+                      ),
+                    ),
                   ],
                 ),
                 Text('net profit', style: sans(11, color: kInkMuted)),
@@ -1164,7 +1459,11 @@ class _ProfitTab extends StatelessWidget {
                 _kv('Gross profit', 'MK ${_fmtMk(p.gross)}'),
                 _kv('Expenses', 'MK ${_fmtMk(p.expenses)}'),
                 const Divider(height: 16, color: kBorder),
-                _kv('Profit still in stock', 'MK ${_fmtMk(p.stockProfit)}', highlight: true),
+                _kv(
+                  'Profit still in stock',
+                  'MK ${_fmtMk(p.stockProfit)}',
+                  highlight: true,
+                ),
               ],
             ),
           ),
@@ -1179,11 +1478,15 @@ class _ProfitTab extends StatelessWidget {
       padding: const EdgeInsets.only(top: 4),
       child: Row(
         children: [
-          Expanded(child: Text(k, style: sans(12, color: kInkMuted))),
-          Text(v,
-              style: highlight
-                  ? sans(12, weight: FontWeight.w700, color: kPrimary)
-                  : mono(12.5, weight: FontWeight.w600, color: kInk)),
+          Expanded(
+            child: Text(k, style: sans(12, color: kInkMuted)),
+          ),
+          Text(
+            v,
+            style: highlight
+                ? sans(12, weight: FontWeight.w700, color: kPrimary)
+                : mono(12.5, weight: FontWeight.w600, color: kInk),
+          ),
         ],
       ),
     );
@@ -1213,27 +1516,73 @@ class _ProfitTab extends StatelessWidget {
           ],
           rows: [
             for (int i = 0; i < rows.length; i++)
-              DataRow(cells: [
-                DataCell(Row(
-                  children: [
-                    if (i == 0)
-                      const Padding(
-                        padding: EdgeInsets.only(right: 6),
-                        child: Icon(Icons.emoji_events_outlined, size: 16, color: Color(0xFFC9A227)),
+              DataRow(
+                cells: [
+                  DataCell(
+                    Row(
+                      children: [
+                        if (i == 0)
+                          const Padding(
+                            padding: EdgeInsets.only(right: 6),
+                            child: Icon(
+                              Icons.emoji_events_outlined,
+                              size: 16,
+                              color: Color(0xFFC9A227),
+                            ),
+                          ),
+                        Text(
+                          rows[i].branchName,
+                          style: sans(13, weight: FontWeight.w600, color: kInk),
+                        ),
+                      ],
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      'MK ${_fmtMk(rows[i].revenue)}',
+                      style: mono(12.5, color: kInk),
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      'MK ${_fmtMk(rows[i].cogs)}',
+                      style: mono(12.5, color: kInk),
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      'MK ${_fmtMk(rows[i].gross)}',
+                      style: mono(12.5, color: kInk),
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      'MK ${_fmtMk(rows[i].expenses)}',
+                      style: mono(12.5, color: kInk),
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      'MK ${_fmtMk(rows[i].net)}',
+                      style: mono(
+                        12.5,
+                        weight: FontWeight.w700,
+                        color: rows[i].net < 0 ? kDanger : kSuccess,
                       ),
-                    Text(rows[i].branchName, style: sans(13, weight: FontWeight.w600, color: kInk)),
-                  ],
-                )),
-                DataCell(Text('MK ${_fmtMk(rows[i].revenue)}', style: mono(12.5, color: kInk))),
-                DataCell(Text('MK ${_fmtMk(rows[i].cogs)}', style: mono(12.5, color: kInk))),
-                DataCell(Text('MK ${_fmtMk(rows[i].gross)}', style: mono(12.5, color: kInk))),
-                DataCell(Text('MK ${_fmtMk(rows[i].expenses)}', style: mono(12.5, color: kInk))),
-                DataCell(Text('MK ${_fmtMk(rows[i].net)}',
-                    style: mono(12.5,
-                        weight: FontWeight.w700, color: rows[i].net < 0 ? kDanger : kSuccess))),
-                DataCell(Text('MK ${_fmtMk(rows[i].stockProfit)}',
-                    style: sans(12.5, weight: FontWeight.w600, color: kPrimary))),
-              ]),
+                    ),
+                  ),
+                  DataCell(
+                    Text(
+                      'MK ${_fmtMk(rows[i].stockProfit)}',
+                      style: sans(
+                        12.5,
+                        weight: FontWeight.w600,
+                        color: kPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
@@ -1250,7 +1599,12 @@ class _BestTab extends StatelessWidget {
   final bool wide;
   final _BestRank rankBy;
   final ValueChanged<_BestRank> onRank;
-  const _BestTab({required this.items, required this.wide, required this.rankBy, required this.onRank});
+  const _BestTab({
+    required this.items,
+    required this.wide,
+    required this.rankBy,
+    required this.onRank,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1311,30 +1665,50 @@ class _BestTab extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: Colors.white,
-                border: Border.all(color: i == 0 ? const Color(0xFFC9A227) : kBorder, width: i == 0 ? 1.5 : 1),
+                border: Border.all(
+                  color: i == 0 ? const Color(0xFFC9A227) : kBorder,
+                  width: i == 0 ? 1.5 : 1,
+                ),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
                   SizedBox(
                     width: 28,
-                    child: Text('${i + 1}',
-                        style: mono(14,
-                            weight: FontWeight.w700,
-                            color: i == 0 ? const Color(0xFFC9A227) : kInkMuted)),
+                    child: Text(
+                      '${i + 1}',
+                      style: mono(
+                        14,
+                        weight: FontWeight.w700,
+                        color: i == 0 ? const Color(0xFFC9A227) : kInkMuted,
+                      ),
+                    ),
                   ),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(items[i].itemName, style: sans(13.5, weight: FontWeight.w600, color: kInk)),
+                        Text(
+                          items[i].itemName,
+                          style: sans(
+                            13.5,
+                            weight: FontWeight.w600,
+                            color: kInk,
+                          ),
+                        ),
                         const SizedBox(height: 2),
-                        Text(sub(items[i]), style: sans(11.5, color: kInkMuted)),
+                        Text(
+                          sub(items[i]),
+                          style: sans(11.5, color: kInkMuted),
+                        ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 10),
-                  Text(metric(items[i]), style: mono(13.5, weight: FontWeight.w700, color: kPrimary)),
+                  Text(
+                    metric(items[i]),
+                    style: mono(13.5, weight: FontWeight.w700, color: kPrimary),
+                  ),
                 ],
               ),
             ),
@@ -1353,7 +1727,11 @@ class _ExpensesTab extends StatelessWidget {
   final PeriodBundle bundle;
   final bool wide;
   final bool showBranch;
-  const _ExpensesTab({required this.bundle, required this.wide, required this.showBranch});
+  const _ExpensesTab({
+    required this.bundle,
+    required this.wide,
+    required this.showBranch,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1365,7 +1743,8 @@ class _ExpensesTab extends StatelessWidget {
       byBranch[e.branchId] = (byBranch[e.branchId] ?? 0) + e.amount;
       branchName[e.branchId] = e.branchName;
     }
-    final branchList = byBranch.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final branchList = byBranch.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
 
     if (bundle.expenses.isEmpty) {
       return const EmptyState(
@@ -1385,13 +1764,24 @@ class _ExpensesTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('By category · MK ${_fmtMk(total)}', style: sans(13.5, weight: FontWeight.w700, color: kInk)),
+          Text(
+            'By category · MK ${_fmtMk(total)}',
+            style: sans(13.5, weight: FontWeight.w700, color: kInk),
+          ),
           const SizedBox(height: 12),
           for (final c in cats) ...[
             Row(
               children: [
-                Expanded(child: Text('${c.category} (${c.count})', style: sans(12.5, color: kInk))),
-                Text('MK ${_fmtMk(c.amount)}', style: mono(12.5, weight: FontWeight.w600, color: kInk)),
+                Expanded(
+                  child: Text(
+                    '${c.category} (${c.count})',
+                    style: sans(12.5, color: kInk),
+                  ),
+                ),
+                Text(
+                  'MK ${_fmtMk(c.amount)}',
+                  style: mono(12.5, weight: FontWeight.w600, color: kInk),
+                ),
               ],
             ),
             const SizedBox(height: 6),
@@ -1420,13 +1810,24 @@ class _ExpensesTab extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('By branch', style: sans(13.5, weight: FontWeight.w700, color: kInk)),
+          Text(
+            'By branch',
+            style: sans(13.5, weight: FontWeight.w700, color: kInk),
+          ),
           const SizedBox(height: 12),
           for (final e in branchList) ...[
             Row(
               children: [
-                Expanded(child: Text(branchName[e.key] ?? '—', style: sans(12.5, color: kInk))),
-                Text('MK ${_fmtMk(e.value)}', style: mono(12.5, weight: FontWeight.w600, color: kInk)),
+                Expanded(
+                  child: Text(
+                    branchName[e.key] ?? '—',
+                    style: sans(12.5, color: kInk),
+                  ),
+                ),
+                Text(
+                  'MK ${_fmtMk(e.value)}',
+                  style: mono(12.5, weight: FontWeight.w600, color: kInk),
+                ),
               ],
             ),
             const SizedBox(height: 6),
@@ -1436,7 +1837,9 @@ class _ExpensesTab extends StatelessWidget {
                 value: total <= 0 ? 0 : (e.value / total).clamp(0.0, 1.0),
                 minHeight: 5,
                 backgroundColor: kSurface,
-                valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFC9A227)),
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  Color(0xFFC9A227),
+                ),
               ),
             ),
             const SizedBox(height: 10),
@@ -1465,7 +1868,10 @@ class _ExpensesTab extends StatelessWidget {
           if (showBranch) ...[branchCard, const SizedBox(height: 12)],
         ],
         const SizedBox(height: 4),
-        Text('Records (${bundle.expenses.length})', style: sans(13, weight: FontWeight.w600, color: kInkMuted)),
+        Text(
+          'Records (${bundle.expenses.length})',
+          style: sans(13, weight: FontWeight.w600, color: kInkMuted),
+        ),
         const SizedBox(height: 8),
         Container(
           decoration: BoxDecoration(
@@ -1476,9 +1882,14 @@ class _ExpensesTab extends StatelessWidget {
           child: Column(
             children: List.generate(bundle.expenses.length, (i) {
               final e = bundle.expenses[i];
-              final title = e.description.trim().isNotEmpty ? e.description.trim() : e.category;
+              final title = e.description.trim().isNotEmpty
+                  ? e.description.trim()
+                  : e.category;
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 11,
+                ),
                 decoration: BoxDecoration(
                   border: i == bundle.expenses.length - 1
                       ? null
@@ -1490,15 +1901,27 @@ class _ExpensesTab extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(title, style: sans(13, weight: FontWeight.w600, color: kInk)),
+                          Text(
+                            title,
+                            style: sans(
+                              13,
+                              weight: FontWeight.w600,
+                              color: kInk,
+                            ),
+                          ),
                           const SizedBox(height: 2),
-                          Text('${e.category} · ${showBranch ? '${e.branchName} · ' : ''}${_fmtDate(e.expenseDate)}',
-                              style: sans(11.5, color: kInkMuted)),
+                          Text(
+                            '${e.category} · ${showBranch ? '${e.branchName} · ' : ''}${_fmtDate(e.expenseDate)}',
+                            style: sans(11.5, color: kInkMuted),
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(width: 10),
-                    Text('MK ${_fmtMk(e.amount)}', style: mono(12.5, weight: FontWeight.w600, color: kInk)),
+                    Text(
+                      'MK ${_fmtMk(e.amount)}',
+                      style: mono(12.5, weight: FontWeight.w600, color: kInk),
+                    ),
                   ],
                 ),
               );
@@ -1541,26 +1964,46 @@ class _DebtsTab extends StatelessWidget {
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          decoration: BoxDecoration(color: kPrimaryTint, borderRadius: BorderRadius.circular(10)),
-          child: Text('Balances are current — they don’t change with the period selector.',
-              style: sans(12, weight: FontWeight.w500, color: kPrimary)),
+          decoration: BoxDecoration(
+            color: kPrimaryTint,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            'Balances are current — they don’t change with the period selector.',
+            style: sans(12, weight: FontWeight.w500, color: kPrimary),
+          ),
         ),
         const SizedBox(height: 14),
         Row(
           children: [
             Expanded(
-                child: _DebtTotalCard(
-                    label: 'Customers owe', value: 'MK ${_fmtMk(custTotal)}', icon: Icons.people_outline)),
+              child: _DebtTotalCard(
+                label: 'Customers owe',
+                value: 'MK ${_fmtMk(custTotal)}',
+                icon: Icons.people_outline,
+              ),
+            ),
             const SizedBox(width: 10),
             Expanded(
-                child: _DebtTotalCard(
-                    label: 'We owe suppliers', value: 'MK ${_fmtMk(supTotal)}', icon: Icons.local_shipping_outlined)),
+              child: _DebtTotalCard(
+                label: 'We owe suppliers',
+                value: 'MK ${_fmtMk(supTotal)}',
+                icon: Icons.local_shipping_outlined,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 16),
-        SearchField(hint: 'Search customers…', controller: searchCtrl, onChanged: onSearch),
+        SearchField(
+          hint: 'Search customers…',
+          controller: searchCtrl,
+          onChanged: onSearch,
+        ),
         const SizedBox(height: 14),
-        Text('Customer debts (${customers.length})', style: sans(13, weight: FontWeight.w600, color: kInkMuted)),
+        Text(
+          'Customer debts (${customers.length})',
+          style: sans(13, weight: FontWeight.w600, color: kInkMuted),
+        ),
         const SizedBox(height: 8),
         if (customers.isEmpty)
           const EmptyState(
@@ -1579,11 +2022,16 @@ class _DebtsTab extends StatelessWidget {
             const SizedBox(height: 8),
           ],
         const SizedBox(height: 16),
-        Text('Supplier balances (${suppliers.length})', style: sans(13, weight: FontWeight.w600, color: kInkMuted)),
+        Text(
+          'Supplier balances (${suppliers.length})',
+          style: sans(13, weight: FontWeight.w600, color: kInkMuted),
+        ),
         if (branchFiltered) ...[
           const SizedBox(height: 4),
-          Text('Suppliers serve all branches — shown across the business.',
-              style: sans(11.5, color: kInkMuted)),
+          Text(
+            'Suppliers serve all branches — shown across the business.',
+            style: sans(11.5, color: kInkMuted),
+          ),
         ],
         const SizedBox(height: 8),
         if (suppliers.isEmpty)
@@ -1612,7 +2060,11 @@ class _DebtTotalCard extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
-  const _DebtTotalCard({required this.label, required this.value, required this.icon});
+  const _DebtTotalCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1628,7 +2080,10 @@ class _DebtTotalCard extends StatelessWidget {
         children: [
           Icon(icon, size: 18, color: kPrimary),
           const SizedBox(height: 8),
-          Text(value, style: mono(16, weight: FontWeight.w700, color: kInk)),
+          Text(
+            value,
+            style: mono(16, weight: FontWeight.w700, color: kInk),
+          ),
           const SizedBox(height: 2),
           Text(label, style: sans(11.5, color: kInkMuted)),
         ],
@@ -1671,13 +2126,22 @@ class _DebtRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: sans(13.5, weight: FontWeight.w600, color: kInk)),
+                    Text(
+                      title,
+                      style: sans(13.5, weight: FontWeight.w600, color: kInk),
+                    ),
                     Text(sub, style: sans(11.5, color: kInkMuted)),
                   ],
                 ),
               ),
-              Text(amount,
-                  style: mono(13.5, weight: FontWeight.w700, color: danger ? kDanger : kPrimary)),
+              Text(
+                amount,
+                style: mono(
+                  13.5,
+                  weight: FontWeight.w700,
+                  color: danger ? kDanger : kPrimary,
+                ),
+              ),
               const SizedBox(width: 6),
               const Icon(Icons.chevron_right, size: 18, color: kInkMuted),
             ],
@@ -1692,7 +2156,11 @@ class _DebtHistorySheet extends StatelessWidget {
   final String title;
   final String subtitle;
   final Future<List<DebtPayment>> Function() loader;
-  const _DebtHistorySheet({required this.title, required this.subtitle, required this.loader});
+  const _DebtHistorySheet({
+    required this.title,
+    required this.subtitle,
+    required this.loader,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1711,14 +2179,22 @@ class _DebtHistorySheet extends StatelessWidget {
           if (snap.hasError) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Text('Couldn’t load history: ${snap.error}', style: sans(13, color: kDanger)),
+              child: Text(
+                'Couldn’t load history: ${snap.error}',
+                style: sans(13, color: kDanger),
+              ),
             );
           }
           final rows = snap.data ?? [];
           if (rows.isEmpty) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: Text('No payments recorded yet.', style: sans(13.5, color: kInkMuted))),
+              child: Center(
+                child: Text(
+                  'No payments recorded yet.',
+                  style: sans(13.5, color: kInkMuted),
+                ),
+              ),
             );
           }
           return ConstrainedBox(
@@ -1726,7 +2202,8 @@ class _DebtHistorySheet extends StatelessWidget {
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: rows.length,
-              separatorBuilder: (_, _) => const Divider(height: 1, color: kBorder),
+              separatorBuilder: (_, _) =>
+                  const Divider(height: 1, color: kBorder),
               itemBuilder: (_, i) {
                 final p = rows[i];
                 return Padding(
@@ -1737,8 +2214,14 @@ class _DebtHistorySheet extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('MK ${_fmtMk(p.amount)}',
-                                style: mono(13.5, weight: FontWeight.w700, color: kSuccess)),
+                            Text(
+                              'MK ${_fmtMk(p.amount)}',
+                              style: mono(
+                                13.5,
+                                weight: FontWeight.w700,
+                                color: kSuccess,
+                              ),
+                            ),
                             const SizedBox(height: 2),
                             Text(
                               '${_fmtDate(p.date)}${p.method.isNotEmpty ? ' · ${p.method}' : ''}${p.note != null ? ' · ${p.note}' : ''}',
@@ -1766,14 +2249,21 @@ class _DebtHistorySheet extends StatelessWidget {
 class _ReportFilterResult {
   final String? branchId;
   final String? periodAction; // null = keep current period
-  const _ReportFilterResult({required this.branchId, required this.periodAction});
+  const _ReportFilterResult({
+    required this.branchId,
+    required this.periodAction,
+  });
 }
 
 class _ReportFiltersSheet extends StatefulWidget {
   final List<ReportBranch> branches;
   final String? branchId;
   final String periodValue;
-  const _ReportFiltersSheet({required this.branches, required this.branchId, required this.periodValue});
+  const _ReportFiltersSheet({
+    required this.branches,
+    required this.branchId,
+    required this.periodValue,
+  });
 
   @override
   State<_ReportFiltersSheet> createState() => _ReportFiltersSheetState();
@@ -1799,17 +2289,26 @@ class _ReportFiltersSheetState extends State<_ReportFiltersSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final needsPicker = _periodValue == 'day' || _periodValue == 'custom' || _periodValue == 'yCustom';
+    final needsPicker =
+        _periodValue == 'day' ||
+        _periodValue == 'custom' ||
+        _periodValue == 'yCustom';
     return SheetFrame(
       title: 'Filters',
       subtitle: 'Scope every report tab.',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Branch', style: sans(13, weight: FontWeight.w600, color: kInkMuted)),
+          Text(
+            'Branch',
+            style: sans(13, weight: FontWeight.w600, color: kInkMuted),
+          ),
           const SizedBox(height: 8),
           Container(
-            decoration: BoxDecoration(border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(
+              border: Border.all(color: kBorder),
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: Column(
               children: [
                 RadioListTile<String?>(
@@ -1833,7 +2332,10 @@ class _ReportFiltersSheetState extends State<_ReportFiltersSheet> {
             ),
           ),
           const SizedBox(height: 16),
-          Text('Period', style: sans(13, weight: FontWeight.w600, color: kInkMuted)),
+          Text(
+            'Period',
+            style: sans(13, weight: FontWeight.w600, color: kInkMuted),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -1849,7 +2351,10 @@ class _ReportFiltersSheetState extends State<_ReportFiltersSheet> {
           ),
           if (needsPicker) ...[
             const SizedBox(height: 8),
-            Text('A date picker opens after you tap Apply.', style: sans(12, color: kInkMuted)),
+            Text(
+              'A date picker opens after you tap Apply.',
+              style: sans(12, color: kInkMuted),
+            ),
           ],
           const SizedBox(height: 20),
           Row(
@@ -1867,10 +2372,14 @@ class _ReportFiltersSheetState extends State<_ReportFiltersSheet> {
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton(
-                  onPressed: () => Navigator.of(context).pop(_ReportFilterResult(
-                    branchId: _branchId,
-                    periodAction: _periodValue == widget.periodValue ? null : _periodValue,
-                  )),
+                  onPressed: () => Navigator.of(context).pop(
+                    _ReportFilterResult(
+                      branchId: _branchId,
+                      periodAction: _periodValue == widget.periodValue
+                          ? null
+                          : _periodValue,
+                    ),
+                  ),
                   style: primaryButtonStyle(),
                   child: const Text('Apply'),
                 ),

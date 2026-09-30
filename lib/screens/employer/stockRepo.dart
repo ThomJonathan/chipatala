@@ -1,7 +1,16 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// Informs the Sale tab that a completed delivery may have changed availability.
+// ============================================================================
+// CASHIER STOCK — branch stock list + receive flow for staff with access.
+//   Receiving goes through receive_stock_delivery() (one atomic call).
+//   Access state comes from has_stock_access() + the cashier's own rows in
+//   v_stock_access_requests. Buying prices are only ever typed into the
+//   receive form — never shown on list rows.
+// ============================================================================
+
+// Bumped whenever branch stock changes elsewhere (receiving, adjustments)
+// so the sale list refreshes its quantities.
 final stockChanged = ValueNotifier<int>(0);
 
 class StockException implements Exception {
@@ -11,254 +20,223 @@ class StockException implements Exception {
   String toString() => message;
 }
 
-class StockItem {
-  final String id;
+class BranchStockRow {
+  final String itemId;
   final String name;
   final String category;
   final String unit;
-  final double reorderLevel;
-  final bool prescription;
-  final bool discontinued;
-  final bool hasExpired;
-  final double quantity;
-  final String? nextExpiry;
-  final double retailPrice;
-  final double wholesalePrice;
-
-  const StockItem({
-    required this.id,
+  final double qty;
+  final double retail;
+  final bool low;
+  final bool expiring;
+  const BranchStockRow({
+    required this.itemId,
     required this.name,
     required this.category,
     required this.unit,
-    required this.reorderLevel,
-    required this.prescription,
-    required this.discontinued,
-    required this.hasExpired,
-    required this.quantity,
-    required this.nextExpiry,
-    required this.retailPrice,
-    required this.wholesalePrice,
-  });
-
-  bool get isOut => quantity <= 0;
-  bool get isLow => !isOut && quantity <= reorderLevel;
-  bool get isExpiringSoon {
-    if (nextExpiry == null) return false;
-    final d = DateTime.tryParse(nextExpiry!);
-    if (d == null) return false;
-    return !d.isBefore(DateTime.now()) && d.difference(DateTime.now()).inDays <= 90;
-  }
-  bool get isExpired => hasExpired;
-}
-
-class StockBatchDetail {
-  final String batchNumber;
-  final double quantity;
-  final String? expiryDate;
-  final double retailPrice;
-  final double wholesalePrice;
-  const StockBatchDetail({
-    required this.batchNumber,
-    required this.quantity,
-    required this.expiryDate,
-    required this.retailPrice,
-    required this.wholesalePrice,
+    required this.qty,
+    required this.retail,
+    required this.low,
+    required this.expiring,
   });
 }
 
-class StockAccessState {
-  final String status;
-  final DateTime? requestedAt;
-  final DateTime? decidedAt;
+class CatalogOption {
+  final String id;
+  final String name;
+  const CatalogOption({required this.id, required this.name});
+}
+
+class SupplierOption {
+  final String id;
+  final String name;
+  const SupplierOption({required this.id, required this.name});
+}
+
+enum OwnAccessState { none, pending, active }
+
+class OwnAccess {
+  final OwnAccessState state;
+  final String? requestId;
   final DateTime? expiresAt;
-  final DateTime? revokedAt;
-  final String? revokedByName;
-  const StockAccessState({
-    required this.status,
-    required this.requestedAt,
-    required this.decidedAt,
-    required this.expiresAt,
-    required this.revokedAt,
-    required this.revokedByName,
-  });
-
-  bool get canReceive => status == 'approved';
+  final DateTime? decidedAt;
+  const OwnAccess({required this.state, this.requestId, this.expiresAt, this.decidedAt});
 }
 
-class DeliveryLine {
+class ReceiveLine {
   final String itemId;
-  final String itemName;
-  final String unit;
-  final String quantity;
-  final String buyingPrice;
-  final String retailPrice;
-  final String wholesalePrice;
-  final String batchNumber;
-  final DateTime? expiryDate;
-  const DeliveryLine({
+  final double quantity;
+  final double buyingPrice;
+  final double retailPrice;
+  final double? wholesalePrice;
+  final String? expiryDate; // YYYY-MM-DD
+  final String? batchNumber;
+  const ReceiveLine({
     required this.itemId,
-    required this.itemName,
-    required this.unit,
     required this.quantity,
     required this.buyingPrice,
     required this.retailPrice,
-    required this.wholesalePrice,
-    required this.batchNumber,
-    required this.expiryDate,
+    this.wholesalePrice,
+    this.expiryDate,
+    this.batchNumber,
   });
 
-  double get total =>
-      (double.tryParse(quantity) ?? 0) * (double.tryParse(buyingPrice) ?? 0);
+  Map<String, dynamic> toJson() => {
+        'item_id': itemId,
+        'quantity': quantity,
+        'buying_price': buyingPrice,
+        'retail_price': retailPrice,
+        if (wholesalePrice != null) 'wholesale_price': wholesalePrice,
+        if (expiryDate != null && expiryDate!.isNotEmpty) 'expiry_date': expiryDate,
+        if (batchNumber != null && batchNumber!.trim().isNotEmpty) 'batch_number': batchNumber!.trim(),
+      };
 }
 
-class StockRepository {
+class CashierStockRepository {
   final SupabaseClient _client = Supabase.instance.client;
 
-  DateTime? _date(Object? value) =>
-      value == null ? null : DateTime.tryParse(value.toString());
+  String _todayStr() {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+  }
 
-  Future<StockAccessState?> fetchAccess() async {
-    final uid = _client.auth.currentUser?.id;
-    if (uid == null) return null;
-    final rows = await _client
-        .from('v_stock_access_requests')
-        .select('effective_status, requested_at, decided_at, expires_at, revoked_at, revoked_by_name')
-        .eq('user_id', uid)
-        .order('requested_at', ascending: false)
-        .limit(1) as List;
-    if (rows.isEmpty) return null;
-    final r = rows.first as Map;
-    return StockAccessState(
-      status: r['effective_status'] as String? ?? 'pending',
-      requestedAt: _date(r['requested_at']),
-      decidedAt: _date(r['decided_at']),
-      expiresAt: _date(r['expires_at']),
-      revokedAt: _date(r['revoked_at']),
-      revokedByName: r['revoked_by_name'] as String?,
-    );
+  Future<List<BranchStockRow>> fetchStock({required String branchId, String query = ''}) async {
+    dynamic q = _client.from('items').select('id, name, category, unit, reorder_level').eq('is_active', true);
+    if (query.trim().isNotEmpty) q = q.ilike('name', '%${query.trim()}%');
+    final items = await q.order('name').limit(200) as List;
+    if (items.isEmpty) return [];
+    final ids = items.map((r) => r['id'] as String).toList();
+    final today = _todayStr();
+    final stock = await _client
+        .from('inventory')
+        .select('item_id, quantity_available, retail_price, expiry_date')
+        .eq('branch_id', branchId)
+        .inFilter('item_id', ids)
+        .gt('quantity_available', 0)
+        .limit(2000) as List;
+
+    final qtyBy = <String, double>{};
+    final priceBy = <String, double>{};
+    final expiring = <String>{};
+    for (final r in stock) {
+      final id = r['item_id'] as String;
+      final qty = ((r['quantity_available'] as num?) ?? 0).toDouble();
+      qtyBy[id] = (qtyBy[id] ?? 0) + qty;
+      final retail = ((r['retail_price'] as num?) ?? 0).toDouble();
+      if (!priceBy.containsKey(id) || retail < priceBy[id]!) priceBy[id] = retail;
+      final exp = r['expiry_date'] as String?;
+      if (exp != null && exp.compareTo(today) >= 0) {
+        try {
+          final d = DateTime.parse(exp);
+          final now = DateTime.now();
+          if (d.difference(DateTime(now.year, now.month, now.day)).inDays <= 90) {
+            expiring.add(id);
+          }
+        } catch (_) {}
+      }
+    }
+    final out = <BranchStockRow>[];
+    for (final it in items) {
+      final id = it['id'] as String;
+      final qty = qtyBy[id] ?? 0;
+      final reorder = ((it['reorder_level'] as num?) ?? 10).toDouble();
+      out.add(BranchStockRow(
+        itemId: id,
+        name: (it['name'] as String?) ?? '—',
+        category: (it['category'] as String?) ?? 'Uncategorised',
+        unit: (it['unit'] as String?) ?? 'unit',
+        qty: qty,
+        retail: priceBy[id] ?? 0,
+        low: qty <= reorder,
+        expiring: expiring.contains(id),
+      ));
+    }
+    return out;
+  }
+
+  Future<List<CatalogOption>> searchCatalog(String query) async {
+    dynamic q = _client.from('items').select('id, name').eq('is_active', true);
+    if (query.trim().isNotEmpty) q = q.ilike('name', '%${query.trim()}%');
+    final rows = await q.order('name').limit(30) as List;
+    return rows.map((r) => CatalogOption(id: r['id'] as String, name: (r['name'] as String?) ?? '—')).toList();
+  }
+
+  Future<List<SupplierOption>> fetchSuppliers() async {
+    final rows = await _client.from('suppliers').select('id, name').eq('is_active', true).order('name').limit(200) as List;
+    return rows.map((r) => SupplierOption(id: r['id'] as String, name: (r['name'] as String?) ?? '—')).toList();
+  }
+
+  Future<bool> hasAccess() async {
+    try {
+      final res = await _client.rpc('has_stock_access');
+      return res as bool? ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<OwnAccess> myStatus() async {
+    try {
+      final rows = await _client.from('v_stock_access_requests').select('id, effective_status, expires_at, decided_at').limit(50) as List;
+      for (final r in rows) {
+        if ((r['effective_status'] as String?) == 'pending') {
+          return const OwnAccess(state: OwnAccessState.pending);
+        }
+      }
+      for (final r in rows) {
+        if ((r['effective_status'] as String?) == 'approved') {
+          DateTime? dt(Object? v) {
+            if (v == null) return null;
+            try {
+              return DateTime.parse(v as String);
+            } catch (_) {
+              return null;
+            }
+          }
+
+          return OwnAccess(
+            state: OwnAccessState.active,
+            requestId: r['id'] as String,
+            expiresAt: dt(r['expires_at']),
+            decidedAt: dt(r['decided_at']),
+          );
+        }
+      }
+      return const OwnAccess(state: OwnAccessState.none);
+    } catch (_) {
+      return const OwnAccess(state: OwnAccessState.none);
+    }
   }
 
   Future<void> requestAccess(String reason) async {
     try {
-      await _client.rpc('request_stock_access', params: {
-        'p_reason': reason.trim().isEmpty ? null : reason.trim(),
-      });
+      await _client.rpc('request_stock_access', params: {'p_reason': reason.trim().isEmpty ? null : reason.trim()});
     } on PostgrestException catch (e) {
       throw StockException(e.message);
     }
   }
 
-  Future<void> endAccess() async {
+  Future<void> endOwnAccess(String requestId) async {
     try {
-      final uid = _client.auth.currentUser?.id;
-      if (uid == null) throw const StockException('You are not signed in.');
-      final row = await _client
-          .from('v_stock_access_requests')
-          .select('id')
-          .eq('user_id', uid)
-          .eq('effective_status', 'approved')
-          .limit(1) as List;
-      if (row.isEmpty) throw const StockException('Your stock access is no longer active.');
-      await _client.rpc('revoke_stock_access', params: {'p_request_id': row.first['id']});
+      await _client.rpc('revoke_stock_access', params: {'p_request_id': requestId});
     } on PostgrestException catch (e) {
       throw StockException(e.message);
     }
-  }
-
-  Future<List<String>> fetchCategories() async {
-    final rows = await _client.from('items').select('category').eq('is_active', true).limit(2000) as List;
-    final result = <String>{};
-    for (final row in rows) {
-      final value = (row['category'] as String?)?.trim();
-      if (value != null && value.isNotEmpty) result.add(value);
-    }
-    return result.toList()..sort();
-  }
-
-  Future<List<StockItem>> fetchItems({required String branchId}) async {
-    final items = await _client
-        .from('items')
-        .select('id, name, category, unit, reorder_level, requires_prescription, is_active')
-        .order('name')
-        .limit(2000) as List;
-    final view = await _client.from('v_sellable_stock').select().eq('branch_id', branchId).limit(2000) as List;
-    final expiredRows = await _client
-        .from('inventory')
-        .select('item_id')
-        .eq('branch_id', branchId)
-        .gt('quantity_available', 0)
-        .lt('expiry_date', DateTime.now().toIso8601String().substring(0, 10))
-        .limit(2000) as List;
-    final expiredIds = {for (final row in expiredRows) row['item_id'] as String};
-    final byId = <String, Map>{};
-    for (final row in view) {
-      byId[row['item_id'] as String] = row as Map;
-    }
-    return items.map((raw) {
-      final r = raw as Map;
-      final v = byId[r['id'] as String];
-      return StockItem(
-        id: r['id'] as String,
-        name: r['name'] as String,
-        category: (r['category'] as String?)?.trim().isNotEmpty == true ? (r['category'] as String).trim() : 'Uncategorised',
-        unit: r['unit'] as String? ?? 'unit',
-        reorderLevel: ((r['reorder_level'] as num?) ?? 0).toDouble(),
-        prescription: r['requires_prescription'] as bool? ?? false,
-        discontinued: (r['is_active'] as bool?) != true,
-        hasExpired: expiredIds.contains(r['id'] as String),
-        quantity: ((v?['sellable_quantity'] as num?) ?? 0).toDouble(),
-        nextExpiry: v?['next_expiry_date'] as String?,
-        retailPrice: ((v?['retail_price'] as num?) ?? 0).toDouble(),
-        wholesalePrice: ((v?['wholesale_price'] as num?) ?? 0).toDouble(),
-      );
-    }).toList();
-  }
-
-  Future<List<StockBatchDetail>> fetchBatches({required String branchId, required String itemId}) async {
-    final rows = await _client
-        .from('inventory')
-        .select('batch_number, quantity_available, expiry_date, retail_price, wholesale_price')
-        .eq('branch_id', branchId)
-        .eq('item_id', itemId)
-        .order('expiry_date', ascending: true, nullsFirst: false)
-        .limit(100) as List;
-    return rows.map((r) => StockBatchDetail(
-      batchNumber: r['batch_number'] as String? ?? '—',
-      quantity: ((r['quantity_available'] as num?) ?? 0).toDouble(),
-      expiryDate: r['expiry_date'] as String?,
-      retailPrice: ((r['retail_price'] as num?) ?? 0).toDouble(),
-      wholesalePrice: ((r['wholesale_price'] as num?) ?? 0).toDouble(),
-    )).toList();
-  }
-
-  Future<List<Map<String, String>>> fetchSuppliers() async {
-    final rows = await _client.from('suppliers').select('id, name').eq('is_active', true).order('name').limit(500) as List;
-    return rows.map((r) => {'id': r['id'] as String, 'name': r['name'] as String}).toList();
   }
 
   Future<void> receive({
     required String branchId,
     String? supplierId,
-    required String invoiceNumber,
-    required DateTime purchaseDate,
-    required List<DeliveryLine> lines,
+    String? invoice,
+    required List<ReceiveLine> lines,
   }) async {
-    if (lines.isEmpty) throw const StockException('Add at least one item.');
+    if (lines.isEmpty) throw const StockException('Add at least one delivery line.');
     try {
       await _client.rpc('receive_stock_delivery', params: {
         'p_branch_id': branchId,
-        'p_supplier_id': supplierId,
-        'p_invoice_number': invoiceNumber.trim().isEmpty ? null : invoiceNumber.trim(),
-        'p_purchase_date': purchaseDate.toIso8601String().substring(0, 10),
-        'p_lines': lines.map((line) => {
-          'item_id': line.itemId,
-          'quantity': line.quantity,
-          'buying_price': line.buyingPrice,
-          'retail_price': line.retailPrice,
-          'wholesale_price': line.wholesalePrice,
-          'batch_number': line.batchNumber,
-          'expiry_date': line.expiryDate?.toIso8601String().substring(0, 10),
-        }).toList(),
+        if (supplierId != null) 'p_supplier_id': supplierId,
+        if (invoice != null && invoice.trim().isNotEmpty) 'p_invoice_number': invoice.trim(),
+        'p_lines': [for (final l in lines) l.toJson()],
       });
     } on PostgrestException catch (e) {
       throw StockException(e.message);

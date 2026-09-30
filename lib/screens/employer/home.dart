@@ -6,6 +6,7 @@ import '../../auth-repository.dart';
 import '../../widgets/employeeShell.dart';
 import 'employeeHome.dart';
 import 'saleScreen.dart';
+import 'settingsScreen.dart';
 import 'stockScreen.dart';
 import 'reportsScreen.dart';
 
@@ -36,16 +37,22 @@ class _EmployeeHomeRouteState extends State<EmployeeHomeRoute> {
     }
 
     var branchName = '';
+    var branchPhone = '';
     if (user.branchId != null) {
       final row = await Supabase.instance.client
           .from('branches')
-          .select('name')
+          .select('name, phone')
           .eq('id', user.branchId!)
           .single();
       branchName = row['name'] as String? ?? '';
+      branchPhone = row['phone'] as String? ?? '';
     }
 
-    return _HomeData(user: user, branchName: branchName);
+    return _HomeData(
+      user: user,
+      branchName: branchName,
+      branchPhone: branchPhone,
+    );
   }
 
   @override
@@ -79,7 +86,14 @@ class _EmployeeHomeRouteState extends State<EmployeeHomeRoute> {
             SaleScreen(user: data.user, branchName: data.branchName),
             StockScreen(user: data.user, branchName: data.branchName),
             EmployeeReportsScreen(user: data.user),
-            const Center(child: Text('Settings')),
+            SettingsScreen(
+              userId: data.user.id,
+              fullName: data.user.fullName,
+              email: data.user.email,
+              role: data.user.role,
+              branchName: data.branchName,
+              branchPhone: data.branchPhone,
+            ),
           ],
         );
       },
@@ -105,5 +119,10 @@ String _roleLabel(String role) {
 class _HomeData {
   final AppUser user;
   final String branchName;
-  const _HomeData({required this.user, required this.branchName});
+  final String branchPhone;
+  const _HomeData({
+    required this.user,
+    required this.branchName,
+    required this.branchPhone,
+  });
 }

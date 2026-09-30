@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 
+import '../../appPrefs.dart';
 import '../../appUser.dart';
 import '../../widgets/employeeShell.dart';
 import 'employeeUi.dart';
 import 'receipt.dart';
 import 'saleRepo.dart';
 import 'stockRepo.dart';
+
+/// Items currently in the sale cart (for the sign-out warning in Settings).
+final saleCartCount = ValueNotifier<int>(0);
 
 // ============================================================================
 // SALE TAB — counter sales in five steps on one screen:
@@ -121,6 +125,9 @@ class _SaleScreenState extends State<SaleScreen> {
     }
     try {
       _categories = await _repo.fetchCategories();
+    } catch (_) {}
+    try {
+      _saleType = await EmpPrefs.defaultSaleType();
     } catch (_) {}
     if (!mounted) return;
     setState(() {});
@@ -375,12 +382,23 @@ class _SaleScreenState extends State<SaleScreen> {
     double? change,
     required bool isReprint,
   }) async {
+    var paper = 'roll80';
+    var auto = false;
+    try {
+      paper = await EmpPrefs.paperSize();
+      auto = await EmpPrefs.autoPrint();
+    } catch (_) {}
+    if (!mounted) return;
+    // A completed sale changes branch stock — tell the other tabs.
+    if (!isReprint) stockChanged.value++;
     await _showSaleSheet(
       context,
       builder: (_) => _ReceiptSheet(
         receipt: receipt,
         cashReceived: isReprint ? null : cashReceived,
         change: isReprint ? null : change,
+        initialFormat: paper,
+        autoPrint: auto && !isReprint,
         onNewSale: () => Navigator.of(context).pop(),
       ),
     );
@@ -410,6 +428,8 @@ class _SaleScreenState extends State<SaleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Keep the sign-out warning in Settings honest.
+    saleCartCount.value = _cart.isEmpty ? 0 : _count;
     return Scaffold(
       backgroundColor: empBg,
       body: SafeArea(
@@ -1736,11 +1756,15 @@ class _ReceiptSheet extends StatefulWidget {
   final Map<String, dynamic> receipt;
   final double? cashReceived;
   final double? change;
+  final String initialFormat;
+  final bool autoPrint;
   final VoidCallback onNewSale;
   const _ReceiptSheet({
     required this.receipt,
     required this.cashReceived,
     required this.change,
+    this.initialFormat = 'roll80',
+    this.autoPrint = false,
     required this.onNewSale,
   });
 
@@ -1749,8 +1773,22 @@ class _ReceiptSheet extends StatefulWidget {
 }
 
 class _ReceiptSheetState extends State<_ReceiptSheet> {
-  String _format = 'roll80';
+  late String _format = widget.initialFormat;
   bool _busy = false;
+  bool _autoDone = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.autoPrint) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_autoDone) {
+          _autoDone = true;
+          _print();
+        }
+      });
+    }
+  }
 
   PdfPageFormat get _pageFormat {
     switch (_format) {

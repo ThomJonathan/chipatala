@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/downloads.dart';
 import '../../widgets/adminShell.dart';
 import 'adminui.dart';
 import 'inventoryRepo.dart';
@@ -591,10 +592,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
           csv = buf.toString();
       }
       final rows = csv.trim().split('\n').length - 1;
-      final path = await FileSaver.instance.saveFile(
+      final path = await saveDownload(
         name: _exportFileName(tab),
         bytes: Uint8List.fromList(utf8.encode(csv)),
-        fileExtension: 'csv',
+        extension: 'csv',
         mimeType: MimeType.csv,
       );
       if (mounted) showToast(context, '$rows rows ($scope) saved to $path');
