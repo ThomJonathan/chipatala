@@ -6,6 +6,7 @@ import '../../auth-repository.dart';
 import '../../widgets/employeeShell.dart';
 import 'employeeHome.dart';
 import 'saleScreen.dart';
+import 'stockScreen.dart';
 
 /// What '/home' should point to in main.dart, instead of EmployeeHomePage:
 ///
@@ -72,7 +73,7 @@ class _EmployeeHomeRouteState extends State<EmployeeHomeRoute> {
           pages: [
             EmployeeHomeScreen(user: data.user, branchName: data.branchName),
             SaleScreen(user: data.user, branchName: data.branchName),
-            const Center(child: Text('Stock')),
+            StockScreen(user: data.user, branchName: data.branchName),
             const Center(child: Text('Reports')),
             const Center(child: Text('Settings')),
           ],

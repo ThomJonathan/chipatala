@@ -382,6 +382,44 @@ FROM inventory inv
          JOIN items i ON i.id = inv.item_id
 GROUP BY inv.branch_id, inv.item_id, i.name, i.reorder_level;
 
+-- Sellable stock follows the same FEFO rule as create_sale: expired batches
+-- never contribute to availability, and the first batch supplies the display
+-- prices/next expiry. Keep buying prices out of this cashier-facing view.
+CREATE VIEW v_sellable_stock WITH (security_invoker = true) AS
+WITH sellable_batches AS (
+    SELECT
+        inv.branch_id,
+        inv.item_id,
+        inv.quantity_available,
+        inv.expiry_date,
+        inv.retail_price,
+        inv.wholesale_price,
+        row_number() OVER (
+            PARTITION BY inv.branch_id, inv.item_id
+            ORDER BY inv.expiry_date ASC NULLS LAST, inv.received_date ASC, inv.created_at ASC
+        ) AS batch_rank
+    FROM inventory inv
+    WHERE inv.quantity_available > 0
+      AND (inv.expiry_date IS NULL OR inv.expiry_date >= current_date)
+)
+SELECT
+    b.branch_id,
+    b.item_id,
+    i.name AS item_name,
+    i.category,
+    i.unit,
+    i.reorder_level,
+    i.requires_prescription,
+    SUM(b.quantity_available) AS sellable_quantity,
+    MAX(b.expiry_date) FILTER (WHERE b.batch_rank = 1) AS next_expiry_date,
+    MAX(b.retail_price) FILTER (WHERE b.batch_rank = 1) AS retail_price,
+    MAX(b.wholesale_price) FILTER (WHERE b.batch_rank = 1) AS wholesale_price
+FROM sellable_batches b
+JOIN items i ON i.id = b.item_id
+WHERE i.is_active
+GROUP BY b.branch_id, b.item_id, i.name, i.category, i.unit,
+         i.reorder_level, i.requires_prescription;
+
 -- Low stock, needs reorder
 CREATE VIEW v_low_stock AS
 SELECT * FROM v_current_stock WHERE quantity_on_hand <= reorder_level;
@@ -1726,6 +1764,117 @@ IF NOT FOUND THEN RAISE EXCEPTION 'There is no active stock access to end.'; END
 END;
 $$;
 
+-- Receive a complete delivery atomically. The cashier may only receive into
+-- their own branch while access is active; managers, stock controllers and
+-- admins retain their existing stock-entry capability.
+CREATE OR REPLACE FUNCTION receive_stock_delivery(
+    p_branch_id uuid,
+    p_supplier_id uuid DEFAULT NULL,
+    p_invoice_number text DEFAULT NULL,
+    p_purchase_date date DEFAULT current_date,
+    p_lines jsonb DEFAULT '[]'::jsonb
+) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+    v_uid uuid := auth.uid();
+    v_role user_role;
+    v_user_branch uuid;
+    v_purchase_id uuid;
+    v_line jsonb;
+    v_item_id uuid;
+    v_inventory_id uuid;
+    v_qty numeric;
+    v_buying numeric;
+    v_retail numeric;
+    v_wholesale numeric;
+    v_expiry date;
+    v_batch text;
+BEGIN
+    SELECT role, branch_id INTO v_role, v_user_branch
+    FROM users WHERE id = v_uid AND is_active;
+    IF v_role IS NULL THEN RAISE EXCEPTION 'Your account is not active.'; END IF;
+    IF p_branch_id IS NULL THEN RAISE EXCEPTION 'Choose a branch.'; END IF;
+    IF v_role = 'cashier' THEN
+        IF v_user_branch IS DISTINCT FROM p_branch_id OR NOT has_stock_access() THEN
+            RAISE EXCEPTION 'Active stock access is required to receive stock at your branch.';
+        END IF;
+    ELSIF v_role NOT IN ('admin', 'manager', 'stock_controller') THEN
+        RAISE EXCEPTION 'Your role cannot receive stock.';
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM branches WHERE id = p_branch_id AND is_active) THEN
+        RAISE EXCEPTION 'Branch not found or inactive.';
+    END IF;
+    IF jsonb_typeof(p_lines) <> 'array' OR jsonb_array_length(p_lines) = 0 THEN
+        RAISE EXCEPTION 'Add at least one delivery line.';
+    END IF;
+    IF p_supplier_id IS NOT NULL AND NOT EXISTS (
+        SELECT 1 FROM suppliers WHERE id = p_supplier_id AND is_active
+    ) THEN
+        RAISE EXCEPTION 'Supplier not found or inactive.';
+    END IF;
+
+    INSERT INTO purchases (
+        branch_id, supplier_id, invoice_number, payment_status,
+        purchase_date, created_by
+    ) VALUES (
+        p_branch_id, p_supplier_id, NULLIF(trim(p_invoice_number), ''),
+        CASE WHEN p_supplier_id IS NULL THEN 'paid'::payment_status
+             ELSE 'pending'::payment_status END,
+        COALESCE(p_purchase_date, current_date), v_uid
+    ) RETURNING id INTO v_purchase_id;
+
+    FOR v_line IN SELECT value FROM jsonb_array_elements(p_lines)
+    LOOP
+        v_item_id := (v_line->>'item_id')::uuid;
+        v_qty := (v_line->>'quantity')::numeric;
+        v_buying := (v_line->>'buying_price')::numeric;
+        v_retail := (v_line->>'retail_price')::numeric;
+        v_wholesale := NULLIF(v_line->>'wholesale_price', '')::numeric;
+        v_expiry := NULLIF(v_line->>'expiry_date', '')::date;
+        v_batch := NULLIF(trim(v_line->>'batch_number'), '');
+
+        IF v_qty IS NULL OR v_qty <= 0 OR v_buying IS NULL OR v_buying < 0
+           OR v_retail IS NULL OR v_retail < 0 THEN
+            RAISE EXCEPTION 'Each delivery line needs valid quantity and prices.';
+        END IF;
+        IF v_wholesale IS NOT NULL AND v_wholesale < 0 THEN
+            RAISE EXCEPTION 'Wholesale prices cannot be negative.';
+        END IF;
+        IF v_expiry IS NOT NULL AND v_expiry < current_date THEN
+            RAISE EXCEPTION 'Expiry dates cannot be in the past.';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM items WHERE id = v_item_id AND is_active) THEN
+            RAISE EXCEPTION 'An item is missing or discontinued.';
+        END IF;
+
+        INSERT INTO inventory (
+            item_id, branch_id, batch_number, buying_price, retail_price,
+            wholesale_price, quantity_received, quantity_available,
+            expiry_date, received_date, created_by
+        ) VALUES (
+            v_item_id, p_branch_id, v_batch, v_buying, v_retail,
+            v_wholesale, v_qty, v_qty, v_expiry,
+            COALESCE(p_purchase_date, current_date), v_uid
+        ) RETURNING id INTO v_inventory_id;
+
+        INSERT INTO purchase_items (
+            purchase_id, item_id, inventory_id, quantity, unit_cost, subtotal
+        ) VALUES (
+            v_purchase_id, v_item_id, v_inventory_id, v_qty, v_buying, v_qty * v_buying
+        );
+
+        INSERT INTO stock_movements (
+            branch_id, item_id, inventory_id, movement_type, quantity,
+            reference_table, reference_id, performed_by, notes
+        ) VALUES (
+            p_branch_id, v_item_id, v_inventory_id, 'purchase_in', v_qty,
+            'purchases', v_purchase_id, v_uid, 'Received delivery'
+        );
+    END LOOP;
+    RETURN v_purchase_id;
+END;
+$$;
+
 -- 4. Readable list for the admin screen and the cashier's own status.
 --    Also returns who approved / ended each access, so History can name them.
 CREATE OR REPLACE VIEW v_stock_access_requests WITH (security_invoker = true) AS
@@ -1748,6 +1897,8 @@ REVOKE ALL ON FUNCTION revoke_stock_access(uuid)              FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION request_stock_access(text)             TO authenticated;
 GRANT EXECUTE ON FUNCTION decide_stock_access(uuid, boolean, int) TO authenticated;
 GRANT EXECUTE ON FUNCTION revoke_stock_access(uuid)              TO authenticated;
+REVOKE ALL ON FUNCTION receive_stock_delivery(uuid, uuid, text, date, jsonb) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION receive_stock_delivery(uuid, uuid, text, date, jsonb) TO authenticated;
 
 
                                              

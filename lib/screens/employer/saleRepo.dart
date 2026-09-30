@@ -86,41 +86,24 @@ class SaleRepository {
     if (items.isEmpty) return [];
 
     final ids = items.map((r) => r['id'] as String).toList();
-    final today = _todayStr();
     final stock = await _client
-        .from('inventory')
-        .select('item_id, quantity_available, retail_price, wholesale_price, expiry_date')
+        .from('v_sellable_stock')
+        .select('item_id, sellable_quantity, retail_price, wholesale_price')
         .eq('branch_id', branchId)
         .inFilter('item_id', ids)
-        .gt('quantity_available', 0)
         .limit(2000) as List;
-
-    // Group by item; sellable = unexpired. Display price = FEFO batch price.
-    final byItem = <String, List<Map>>{};
+    final byItem = <String, Map>{};
     for (final r in stock) {
-      byItem.putIfAbsent(r['item_id'] as String, () => []).add(r as Map);
-    }
-    int expRank(Map b) {
-      final e = b['expiry_date'] as String?;
-      if (e == null) return 1 << 30;
-      return e.compareTo('');
+      byItem[r['item_id'] as String] = r as Map;
     }
 
     final out = <SaleItem>[];
     for (final it in items) {
       final id = it['id'] as String;
-      final batches = (byItem[id] ?? []).where((b) {
-        final e = b['expiry_date'] as String?;
-        return e == null || e.compareTo(today) >= 0;
-      }).toList();
-      batches.sort((a, b) => expRank(a).compareTo(expRank(b)));
-      var avail = 0.0;
-      for (final b in batches) {
-        avail += ((b['quantity_available'] as num?) ?? 0).toDouble();
-      }
-      final first = batches.isNotEmpty ? batches.first : null;
-      final retail = ((first?['retail_price'] as num?) ?? 0).toDouble();
-      final wholesale = ((first?['wholesale_price'] as num?) ?? retail).toDouble();
+      final batch = byItem[id];
+      final avail = ((batch?['sellable_quantity'] as num?) ?? 0).toDouble();
+      final retail = ((batch?['retail_price'] as num?) ?? 0).toDouble();
+      final wholesale = ((batch?['wholesale_price'] as num?) ?? retail).toDouble();
       out.add(SaleItem(
         itemId: id,
         name: (it['name'] as String?) ?? '—',
@@ -234,10 +217,6 @@ class SaleRepository {
     return msg.isEmpty ? 'Something went wrong. Please try again.' : msg;
   }
 
-  String _todayStr() {
-    final now = DateTime.now();
-    return '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-  }
 }
 
 class ReportBranchLite {
