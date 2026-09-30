@@ -190,8 +190,9 @@ class SaleRepository {
         .toList();
   }
 
-  /// Calls create_sale. Throws SaleException with the server's plain message
-  /// (NOT_ENOUGH:name:qty -> "Not enough stock for …").
+  /// Calls create_sale (schema.sql). The server resolves the branch from the
+  /// signed-in user; p_branch_id is only used for admins. Server messages
+  /// are already plain language, so they are shown as-is.
   Future<Map<String, dynamic>> createSale({
     required String branchId,
     required List<Map<String, dynamic>> lines, // [{item_id, quantity}]
@@ -227,26 +228,10 @@ class SaleRepository {
   }
 
   String _friendly(String server) {
-    // Server raises 'CODE:detail' — turn the known ones into plain language.
-    final code = server.split(':').first.trim();
-    final rest = server.split(':').skip(1).join(':').trim();
-    switch (code) {
-      case 'NOT_ENOUGH':
-        final parts = rest.split(':');
-        final name = parts.isNotEmpty ? parts[0].trim() : 'item';
-        final qty = parts.length > 1 ? parts.sublist(1).join(':').replaceFirst(RegExp(r'^only\s*'), '').trim() : '';
-        return 'Not enough stock for $name${qty.isNotEmpty ? ': only $qty available' : ''}';
-      case 'NO_CUSTOMER':
-        return rest.isEmpty ? 'A customer is required for credit sales.' : rest;
-      case 'NOT_ALLOWED':
-        return rest.isEmpty ? 'Your role cannot record sales.' : rest;
-      case 'BAD_PAYMENT':
-        return rest.isEmpty ? 'Check the payment amounts.' : rest;
-      case 'EMPTY_SALE':
-        return 'The cart is empty.';
-      default:
-        return rest.isNotEmpty ? rest : server;
-    }
+    // schema.sql raises plain-language messages already
+    // ('Not enough stock for AMLODIPINE: only 3 available.') — show as-is.
+    final msg = server.trim();
+    return msg.isEmpty ? 'Something went wrong. Please try again.' : msg;
   }
 
   String _todayStr() {

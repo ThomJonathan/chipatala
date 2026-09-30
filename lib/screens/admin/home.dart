@@ -10,6 +10,7 @@ import 'branch.dart';
 import 'inventory.dart';
 import 'reports.dart';
 import 'settings.dart';
+import 'stockAccessRepo.dart';
 import 'user.dart';
 
 /// Top-level route for '/admin-home'.
@@ -384,6 +385,8 @@ class _MobileLayout extends StatelessWidget {
         _ExpensesSection(expenses: data.recentExpenses, expensesToday: data.expensesToday),
         const SizedBox(height: 22),
         _AttentionButton(count: data.attentionItems.length, onTap: () => _openAttentionPage(context, data.attentionItems)),
+        const SizedBox(height: 12),
+        const _StockAccessCard(),
         const SizedBox(height: 24),
       ],
     );
@@ -464,6 +467,8 @@ class _DesktopLayout extends StatelessWidget {
         ),
         const SizedBox(height: 28),
         _ExpensesSection(expenses: data.recentExpenses, expensesToday: data.expensesToday),
+        const SizedBox(height: 12),
+        const _StockAccessCard(),
       ],
     );
   }
@@ -757,6 +762,71 @@ class _AttentionButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// Home "Stock access" card: waiting + active counts, opens the Pending tab.
+class _StockAccessCard extends StatelessWidget {
+  const _StockAccessCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<List<StockAccessRequest>>(
+      future: StockAccessRepository().fetchAll(),
+      builder: (context, snap) {
+        final rows = snap.data ?? [];
+        final waiting = rows.where((r) => r.isPending).length;
+        final active = rows.where((r) => r.isActive).length;
+        // Keep the Users nav badge fresh even if the Users tab never opens.
+        if (snap.hasData) stockAccessPendingCount.value = waiting;
+        final title = snap.hasError
+            ? 'Stock access'
+            : waiting == 0 && active == 0
+                ? 'No stock access requests'
+                : '$waiting waiting · $active active';
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () {
+              stockAccessInitialTab.value = 0; // Pending tab
+              AdminShell.switchTo(context, 3); // Users tab
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                  border: Border.all(color: _kBorder), borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                        color: waiting > 0 ? const Color(0xFFFBF0E2) : const Color(0xFFE4EAFB),
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Icon(Icons.key_outlined,
+                        size: 18, color: waiting > 0 ? _kWarnColor : _kPrimary),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(title, style: _sans(14, weight: FontWeight.w600, color: _kInk)),
+                        const SizedBox(height: 2),
+                        Text('Cashier stock permissions',
+                            style: _sans(12, color: _kInkMuted)),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, size: 20, color: _kInkMuted),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

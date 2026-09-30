@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../widgets/adminShell.dart';
 import 'adminhomeRepo.dart';
 import 'adminui.dart';
 import 'assignUser.dart';
+import 'stockAccess.dart';
+import 'stockAccessRepo.dart';
 
 // ============================================================================
 // USERS SCREEN
@@ -36,6 +39,31 @@ class _UsersScreenState extends State<UsersScreen> {
   String? _error;
   _Filter _filter = _Filter.all;
   String _query = '';
+  int _section = 0; // 0 = staff list, 1 = stock access
+  int _accessTab = 0;
+  int _accessNonce = 0;
+  bool _wasSelected = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Refresh when the admin returns here; honour Home-card deep-links
+    // into the Stock access section (rebuilt via nonce so it jumps tabs).
+    final selected = AdminShellScope.of(context)?.selectedIndex == 3;
+    if (selected && !_wasSelected) {
+      _load(silent: true);
+      final target = stockAccessInitialTab.value;
+      if (target >= 0) {
+        stockAccessInitialTab.value = -1;
+        setState(() {
+          _section = 1;
+          _accessTab = target.clamp(0, 2);
+          _accessNonce++;
+        });
+      }
+    }
+    _wasSelected = selected;
+  }
 
   @override
   void initState() {
@@ -198,39 +226,69 @@ class _UsersScreenState extends State<UsersScreen> {
                                 ? 'Loading…'
                                 : '${_users.length} accounts · $pending awaiting approval',
                           ),
+                          const SizedBox(height: 16),
+                          ValueListenableBuilder<int>(
+                            valueListenable: stockAccessPendingCount,
+                            builder: (_, accessPending, __) => SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  FilterPill(
+                                    label: 'Staff',
+                                    selected: _section == 0,
+                                    onTap: () => setState(() => _section = 0),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  FilterPill(
+                                    label: accessPending > 0
+                                        ? 'Stock access ($accessPending)'
+                                        : 'Stock access',
+                                    selected: _section == 1,
+                                    onTap: () => setState(() => _section = 1),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
                           const SizedBox(height: 20),
                         ],
-                        SearchField(
-                          hint: 'Search by name, email or branch',
-                          onChanged: (v) => setState(() => _query = v),
-                        ),
-                        const SizedBox(height: 12),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              FilterPill(
-                                label: 'All (${_users.length})',
-                                selected: _filter == _Filter.all,
-                                onTap: () => setState(() => _filter = _Filter.all),
-                              ),
-                              const SizedBox(width: 8),
-                              FilterPill(
-                                label: 'Pending ($pending)',
-                                selected: _filter == _Filter.pending,
-                                onTap: () => setState(() => _filter = _Filter.pending),
-                              ),
-                              const SizedBox(width: 8),
-                              FilterPill(
-                                label: 'Active ($active)',
-                                selected: _filter == _Filter.active,
-                                onTap: () => setState(() => _filter = _Filter.active),
-                              ),
-                            ],
+                        if (_section == 0) ...[
+                          SearchField(
+                            hint: 'Search by name, email or branch',
+                            onChanged: (v) => setState(() => _query = v),
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        _body(wide),
+                          const SizedBox(height: 12),
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                FilterPill(
+                                  label: 'All (${_users.length})',
+                                  selected: _filter == _Filter.all,
+                                  onTap: () => setState(() => _filter = _Filter.all),
+                                ),
+                                const SizedBox(width: 8),
+                                FilterPill(
+                                  label: 'Pending ($pending)',
+                                  selected: _filter == _Filter.pending,
+                                  onTap: () => setState(() => _filter = _Filter.pending),
+                                ),
+                                const SizedBox(width: 8),
+                                FilterPill(
+                                  label: 'Active ($active)',
+                                  selected: _filter == _Filter.active,
+                                  onTap: () => setState(() => _filter = _Filter.active),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _body(wide),
+                        ] else
+                          StockAccessSection(
+                            key: ValueKey(_accessNonce),
+                            initialTab: _accessTab,
+                          ),
                       ],
                     ),
                   ),

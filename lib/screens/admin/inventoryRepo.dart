@@ -157,6 +157,8 @@ class StockMovement {
   final double quantity;
   final String? notes;
   final String createdAt;
+  final String? performedBy;
+  final String? performedByName;
   const StockMovement({
     required this.id,
     required this.branchName,
@@ -165,6 +167,8 @@ class StockMovement {
     required this.quantity,
     required this.notes,
     required this.createdAt,
+    this.performedBy,
+    this.performedByName,
   });
 }
 
@@ -356,15 +360,27 @@ class InventoryRepository {
     return list;
   }
 
-  Future<List<StockMovement>> fetchMovements({String? branchId, String? type, int limit = 150}) async {
+  Future<List<StockMovement>> fetchMovements({
+    String? branchId,
+    String? type,
+    int limit = 150,
+    String? performedBy,
+    DateTime? from,
+    DateTime? to,
+  }) async {
     dynamic q = _client.from('stock_movements').select(
-        'id, movement_type, quantity, notes, created_at, items(name), branches(name)');
+        'id, movement_type, quantity, notes, created_at, performed_by, '
+        'items(name), branches(name), performer:users(full_name)');
     if (branchId != null) q = q.eq('branch_id', branchId);
     if (type != null) q = q.eq('movement_type', type);
+    if (performedBy != null) q = q.eq('performed_by', performedBy);
+    if (from != null) q = q.gte('created_at', from.toIso8601String());
+    if (to != null) q = q.lt('created_at', to.toIso8601String());
     final rows = await q.order('created_at', ascending: false).limit(limit) as List;
     return rows.map((r) {
       final item = r['items'];
       final br = r['branches'];
+      final perf = r['performer'];
       return StockMovement(
         id: r['id'] as String,
         branchName: (br is Map ? br['name'] as String? : null) ?? '—',
@@ -373,6 +389,8 @@ class InventoryRepository {
         quantity: (r['quantity'] as num).toDouble(),
         notes: r['notes'] as String?,
         createdAt: (r['created_at'] as String?) ?? '',
+        performedBy: r['performed_by'] as String?,
+        performedByName: (perf is Map ? perf['full_name'] as String? : null),
       );
     }).toList();
   }

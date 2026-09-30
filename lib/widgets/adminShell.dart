@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../screens/admin/stockAccessRepo.dart';
+
 // ============================================================================
 // ADMIN SHELL — one self-contained file: the admin navigation UI.
 //   - phone widths  -> floating bottom nav bar (all 6 screens)
@@ -202,6 +204,7 @@ class _BottomNav extends StatelessWidget {
           children: _kDestinations.map((d) {
             final active = d.pageIndex == selectedIndex;
             final color = active ? primary : _kInkMuted;
+            final isUsers = d.pageIndex == 3;
             return Expanded(
               child: InkWell(
                 borderRadius: BorderRadius.circular(10),
@@ -211,7 +214,33 @@ class _BottomNav extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(active ? d.activeIcon : d.icon, size: 20, color: color),
+                      // Count badge on Users while stock-access requests wait.
+                      ValueListenableBuilder<int>(
+                        valueListenable: stockAccessPendingCount,
+                        builder: (_, pending, __) => Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Icon(active ? d.activeIcon : d.icon, size: 20, color: color),
+                            if (isUsers && pending > 0)
+                              Positioned(
+                                right: -8,
+                                top: -6,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFB4544A),
+                                    borderRadius: BorderRadius.circular(9),
+                                  ),
+                                  child: Text(
+                                    pending > 9 ? '9+' : '$pending',
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                       const SizedBox(height: 2),
                       Text(
                         d.label,
@@ -334,6 +363,7 @@ class _SideNav extends StatelessWidget {
           ),
           ..._kDestinations.map((d) {
             final active = d.pageIndex == selectedIndex;
+            final isUsers = d.pageIndex == 3;
             return Padding(
               padding: const EdgeInsets.only(bottom: 2),
               child: Material(
@@ -356,6 +386,33 @@ class _SideNav extends StatelessWidget {
                             color: active ? Colors.white : _kInkMuted,
                           ),
                         ),
+                        if (isUsers)
+                          ValueListenableBuilder<int>(
+                            valueListenable: stockAccessPendingCount,
+                            builder: (_, pending, __) {
+                              if (pending <= 0) return const SizedBox.shrink();
+                              return Row(
+                                children: [
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: active ? Colors.white : const Color(0xFFB4544A),
+                                      borderRadius: BorderRadius.circular(9),
+                                    ),
+                                    child: Text(
+                                      '$pending',
+                                      style: GoogleFonts.ibmPlexSans(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: active ? primary : Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
                       ],
                     ),
                   ),

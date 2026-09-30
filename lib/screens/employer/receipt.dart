@@ -10,9 +10,10 @@ class ReceiptService {
   static final _dateFmt = DateFormat('dd MMM yyyy, HH:mm');
   static String _mk(num v) => 'MK ${_money.format(v)}';
 
-  /// Sale dates are stored as timestamptz; receipts always show Malawi time.
-  static DateTime _malawiTime(String iso) =>
-      DateTime.parse(iso).toUtc().add(const Duration(hours: 2));
+  /// Sale dates come back from get_receipt/create_sale already converted to
+  /// Malawi wall time (AT TIME ZONE 'Africa/Blantyre'), so display as-is —
+  /// never shift again, or devices outside Malawi would double-shift.
+  static DateTime _receiptTime(String iso) => DateTime.parse(iso);
 
   /// [format]: roll80 for 80mm thermal printers, roll57 for 58mm, PdfPageFormat.a5 for normal paper.
   static Future<pw.Document> build(
@@ -23,7 +24,7 @@ class ReceiptService {
       }) async {
     final items = (r['items'] as List).cast<Map<String, dynamic>>();
     final balanceDue = (r['balance_due'] as num).toDouble();
-    final date = _malawiTime(r['sale_date'] as String);
+    final date = _receiptTime(r['sale_date'] as String);
 
     pw.Widget line(String l, String rgt, {bool bold = false}) => pw.Row(
       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,

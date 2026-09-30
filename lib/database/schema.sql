@@ -1587,3 +1587,161 @@ CREATE POLICY "Inventory update: admin, or manager/stock controller at own branc
                                                                                                                                 AND user_role_name() IN ('manager', 'stock_controller')));
 
 CREATE POLICY "Admins delete inventory" ON inventory FOR DELETE USING (is_admin());
+
+
+                                                                -- ============================================================================
+-- TEMPORARY STOCK ACCESS FOR CASHIERS: request -> admin approves -> admin revokes
+-- ============================================================================
+
+CREATE TYPE stock_access_status AS ENUM ('pending', 'approved', 'denied', 'revoked', 'expired');
+
+CREATE TABLE stock_access_grants (
+                                     id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+                                     user_id       uuid NOT NULL REFERENCES users(id),
+                                     branch_id     uuid NOT NULL REFERENCES branches(id),
+                                     reason        text,
+                                     status        stock_access_status NOT NULL DEFAULT 'pending',
+                                     requested_at  timestamptz NOT NULL DEFAULT now(),
+                                     decided_by    uuid REFERENCES users(id),
+                                     decided_at    timestamptz,
+                                     expires_at    timestamptz,                -- NULL = until the admin removes it
+                                     revoked_by    uuid REFERENCES users(id),
+                                     revoked_at    timestamptz
+);
+
+-- One open request or grant per person
+CREATE UNIQUE INDEX one_open_stock_access_per_user
+    ON stock_access_grants(user_id) WHERE status IN ('pending', 'approved');
+
+-- Clients can only READ this table; every change goes through the functions below
+ALTER TABLE stock_access_grants ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "View stock access: admin all, user own"
+    ON stock_access_grants FOR SELECT
+                                          USING (is_admin() OR user_id = auth.uid());
+
+-- The one helper every stock rule uses
+CREATE OR REPLACE FUNCTION has_stock_access() RETURNS boolean
+LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
+SELECT COALESCE((
+                    SELECT u.is_active AND (
+                        u.role IN ('admin', 'manager', 'stock_controller')
+                            OR EXISTS (SELECT 1 FROM stock_access_grants g
+                                       WHERE g.user_id = u.id AND g.status = 'approved'
+                                         AND (g.expires_at IS NULL OR g.expires_at > now())))
+                    FROM users u WHERE u.id = auth.uid()), false);
+$$;
+
+ALTER TABLE users DROP COLUMN IF EXISTS can_manage_stock;   -- from the earlier idea
+
+-- Inventory, purchases and purchase lines now follow the helper
+DROP POLICY IF EXISTS "Inventory insert: admin, or manager/stock controller at own branch" ON inventory;
+DROP POLICY IF EXISTS "Inventory update: admin, or manager/stock controller at own branch" ON inventory;
+DROP POLICY IF EXISTS "Inventory insert: stock access at own branch" ON inventory;
+DROP POLICY IF EXISTS "Inventory update: stock access at own branch" ON inventory;
+
+CREATE POLICY "Inventory insert: stock access at own branch" ON inventory FOR INSERT
+    WITH CHECK (is_admin() OR (branch_id = user_branch_id() AND has_stock_access()));
+CREATE POLICY "Inventory update: stock access at own branch" ON inventory FOR UPDATE
+                                                                                                             USING      (is_admin() OR (branch_id = user_branch_id() AND has_stock_access()))
+                                                                              WITH CHECK (is_admin() OR (branch_id = user_branch_id() AND has_stock_access()));
+
+DROP POLICY IF EXISTS "Create purchases: admin, or manager/stock controller at own branch" ON purchases;
+DROP POLICY IF EXISTS "Create purchases: stock access at own branch" ON purchases;
+CREATE POLICY "Create purchases: stock access at own branch" ON purchases FOR INSERT
+    WITH CHECK (is_admin() OR (branch_id = user_branch_id() AND has_stock_access()));
+
+DROP POLICY IF EXISTS "Insert purchase_items via parent purchase" ON purchase_items;
+CREATE POLICY "Insert purchase_items via parent purchase" ON purchase_items FOR INSERT
+    WITH CHECK (EXISTS (
+        SELECT 1 FROM purchases p
+        WHERE p.id = purchase_items.purchase_id
+          AND (is_admin() OR (p.branch_id = user_branch_id() AND has_stock_access()))));
+
+-- 1. Cashier asks
+CREATE OR REPLACE FUNCTION request_stock_access(p_reason text DEFAULT NULL) RETURNS uuid
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_uid uuid := auth.uid(); v_role user_role; v_branch uuid; v_id uuid;
+BEGIN
+SELECT role, branch_id INTO v_role, v_branch FROM users WHERE id = v_uid AND is_active;
+IF v_role IS NULL THEN RAISE EXCEPTION 'Your account is not active.'; END IF;
+    IF v_role <> 'cashier' THEN
+        RAISE EXCEPTION 'Only cashiers need to request stock access.';
+END IF;
+
+UPDATE stock_access_grants SET status = 'expired'          -- tidy up timed-out grants
+WHERE user_id = v_uid AND status = 'approved'
+  AND expires_at IS NOT NULL AND expires_at <= now();
+
+IF EXISTS (SELECT 1 FROM stock_access_grants WHERE user_id = v_uid AND status = 'pending') THEN
+        RAISE EXCEPTION 'You already have a request waiting for the admin.';
+END IF;
+    IF EXISTS (SELECT 1 FROM stock_access_grants WHERE user_id = v_uid AND status = 'approved') THEN
+        RAISE EXCEPTION 'You already have stock access.';
+END IF;
+
+INSERT INTO stock_access_grants (user_id, branch_id, reason)
+VALUES (v_uid, v_branch, NULLIF(trim(p_reason), ''))
+    RETURNING id INTO v_id;
+RETURN v_id;
+END;
+$$;
+
+-- 2. Admin approves (optionally with a time limit in hours) or denies
+CREATE OR REPLACE FUNCTION decide_stock_access(
+    p_request_id uuid, p_approve boolean, p_hours int DEFAULT NULL) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+    IF NOT is_admin() THEN RAISE EXCEPTION 'Only admins can approve stock access.'; END IF;
+    IF p_hours IS NOT NULL AND p_hours <= 0 THEN
+        RAISE EXCEPTION 'The time limit must be above zero hours.';
+END IF;
+
+UPDATE stock_access_grants
+SET status = CASE WHEN p_approve THEN 'approved'::stock_access_status
+                  ELSE 'denied'::stock_access_status END,
+    decided_by = auth.uid(),
+    decided_at = now(),
+    expires_at = CASE WHEN p_approve AND p_hours IS NOT NULL
+                          THEN now() + make_interval(hours => p_hours) END
+WHERE id = p_request_id AND status = 'pending';
+IF NOT FOUND THEN RAISE EXCEPTION 'This request is no longer waiting.'; END IF;
+END;
+$$;
+
+-- 3. Admin removes access (the cashier can also hand it back with "I'm done")
+CREATE OR REPLACE FUNCTION revoke_stock_access(p_request_id uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+UPDATE stock_access_grants
+SET status = 'revoked', revoked_by = auth.uid(), revoked_at = now()
+WHERE id = p_request_id AND status = 'approved'
+  AND (is_admin() OR user_id = auth.uid());
+IF NOT FOUND THEN RAISE EXCEPTION 'There is no active stock access to end.'; END IF;
+END;
+$$;
+
+-- 4. Readable list for the admin screen and the cashier's own status.
+--    Also returns who approved / ended each access, so History can name them.
+CREATE OR REPLACE VIEW v_stock_access_requests WITH (security_invoker = true) AS
+SELECT g.id, g.user_id, u.full_name, g.branch_id, b.name AS branch_name,
+       g.reason, g.requested_at, g.decided_at, g.expires_at, g.revoked_at,
+       d.full_name AS decided_by_name, r.full_name AS revoked_by_name,
+       g.revoked_by AS revoked_by_id,
+       CASE WHEN g.status = 'approved' AND g.expires_at IS NOT NULL AND g.expires_at <= now()
+                THEN 'expired' ELSE g.status::text END AS effective_status
+FROM stock_access_grants g
+         JOIN users u ON u.id = g.user_id
+         JOIN branches b ON b.id = g.branch_id
+         LEFT JOIN users d ON d.id = g.decided_by
+         LEFT JOIN users r ON r.id = g.revoked_by
+ORDER BY g.requested_at DESC;
+
+REVOKE ALL ON FUNCTION request_stock_access(text)             FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION decide_stock_access(uuid, boolean, int) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION revoke_stock_access(uuid)              FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION request_stock_access(text)             TO authenticated;
+GRANT EXECUTE ON FUNCTION decide_stock_access(uuid, boolean, int) TO authenticated;
+GRANT EXECUTE ON FUNCTION revoke_stock_access(uuid)              TO authenticated;
+
+
+                                             

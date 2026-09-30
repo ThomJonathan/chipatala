@@ -269,6 +269,9 @@ class _SaleScreenState extends State<SaleScreen> {
       });
       await _refreshAll(silent: true);
       if (!mounted) return;
+      // Coming from the mobile cart sheet: close it first so the receipt
+      // opens cleanly (State.context stays valid — only the sheet pops).
+      if (fromSheet) Navigator.of(context).pop();
       await _openReceipt(
         receipt,
         cashReceived: cashGivenForReceipt,

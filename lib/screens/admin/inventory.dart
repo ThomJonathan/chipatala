@@ -4,8 +4,10 @@ import 'dart:typed_data';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/adminShell.dart';
 import 'adminui.dart';
 import 'inventoryRepo.dart';
+import 'stockAccessRepo.dart';
 
 // ============================================================================
 // ADMIN INVENTORY — oversight and decisions, not data entry.
@@ -114,6 +116,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
   String? _movementType; // null = all types
   int _tab = 0;
 
+  // Stock-access "View activity" deep-link: movements filtered to one
+  // cashier + the window their access was active. Removable via chip.
+  String? _activityUserId;
+  String? _activityUserName;
+  DateTime? _activityFrom;
+  DateTime? _activityTo;
+  bool _wasInventorySelected = false;
+
   bool _loading = true;
   String? _error;
 
@@ -136,6 +146,32 @@ class _InventoryScreenState extends State<InventoryScreen> {
     super.dispose();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Pick up a "View activity" jump from the Stock access section: show
+    // Movements scoped to that cashier + window (branch filter cleared so
+    // the link always lands on results).
+    final selected = AdminShellScope.of(context)?.selectedIndex == 1;
+    if (selected && !_wasInventorySelected) {
+      final f = stockActivityFilter.value;
+      if (f != null) {
+        stockActivityFilter.value = null;
+        setState(() {
+          _tab = 3;
+          _movementType = null;
+          _branchId = null;
+          _activityUserId = f.userId;
+          _activityUserName = f.userName;
+          _activityFrom = f.from;
+          _activityTo = f.to;
+        });
+        _load();
+      }
+    }
+    _wasInventorySelected = selected;
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -147,7 +183,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
         _repo.fetchCategories(),
         _repo.fetchOverview(branchId: _branchId),
         _repo.fetchLowStock(branchId: _branchId),
-        _repo.fetchMovements(branchId: _branchId, limit: 150),
+        _repo.fetchMovements(
+          branchId: _branchId,
+          limit: 150,
+          performedBy: _activityUserId,
+          from: _activityFrom,
+          to: _activityTo,
+        ),
         _repo.fetchPurchases(branchId: _branchId),
         _repo.fetchSupplierBalances(),
         _repo.fetchCatalog(includeInactive: true),
@@ -727,6 +769,20 @@ class _InventoryScreenState extends State<InventoryScreen> {
           wide: wide,
           selectedType: _movementType,
           onTypeChanged: (t) => setState(() => _movementType = t),
+          activityLabel: _activityUserId == null
+              ? null
+              : 'Activity: ${_activityUserName ?? 'cashier'} · ${_fmtDate(_activityFrom?.toIso8601String())} – ${_fmtDate(_activityTo?.toIso8601String())}',
+          onClearActivity: _activityUserId == null
+              ? null
+              : () {
+                  setState(() {
+                    _activityUserId = null;
+                    _activityUserName = null;
+                    _activityFrom = null;
+                    _activityTo = null;
+                  });
+                  _load();
+                },
         );
       case 4:
         return _PurchasesTab(purchases: _visiblePurchases, balances: _balances, wide: wide);
@@ -1229,11 +1285,15 @@ class _MovementsTab extends StatelessWidget {
   final bool wide;
   final String? selectedType;
   final ValueChanged<String?> onTypeChanged;
+  final String? activityLabel;
+  final VoidCallback? onClearActivity;
   const _MovementsTab({
     required this.movements,
     required this.wide,
     required this.selectedType,
     required this.onTypeChanged,
+    this.activityLabel,
+    this.onClearActivity,
   });
 
   @override
@@ -1241,6 +1301,30 @@ class _MovementsTab extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (activityLabel != null) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            decoration: BoxDecoration(color: kPrimaryTint, borderRadius: BorderRadius.circular(10)),
+            child: Row(
+              children: [
+                const Icon(Icons.person_search_outlined, size: 17, color: kPrimary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(activityLabel!, style: sans(12.5, weight: FontWeight.w600, color: kPrimary)),
+                ),
+                InkWell(
+                  onTap: onClearActivity,
+                  borderRadius: BorderRadius.circular(14),
+                  child: const Padding(
+                    padding: EdgeInsets.all(4),
+                    child: Icon(Icons.close, size: 16, color: kPrimary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: Row(
@@ -1302,7 +1386,7 @@ class _MovementsTab extends StatelessWidget {
                           children: [
                             Text(m.itemName, style: sans(13, weight: FontWeight.w600, color: kInk)),
                             const SizedBox(height: 2),
-                            Text('${m.branchName} · ${meta.label} · ${_fmtDateTime(m.createdAt)}',
+                            Text('${m.branchName} · ${meta.label} · ${_fmtDateTime(m.createdAt)}${m.performedByName != null && m.performedByName!.trim().isNotEmpty ? ' · by ${m.performedByName!.trim()}' : ''}',
                                 style: sans(11.5, color: kInkMuted)),
                             if ((m.notes ?? '').trim().isNotEmpty) ...[
                               const SizedBox(height: 2),
