@@ -1,4 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+/// Informs the Sale tab that a completed delivery may have changed availability.
+final stockChanged = ValueNotifier<int>(0);
 
 class StockException implements Exception {
   final String message;

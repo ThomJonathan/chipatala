@@ -6,6 +6,7 @@ import '../../widgets/employeeShell.dart';
 import 'employeeUi.dart';
 import 'receipt.dart';
 import 'saleRepo.dart';
+import 'stockRepo.dart';
 
 // ============================================================================
 // SALE TAB — counter sales in five steps on one screen:
@@ -77,22 +78,31 @@ class _SaleScreenState extends State<SaleScreen> {
   String get _branchLabel {
     if (widget.user.branchId != null) return widget.branchName;
     if (_adminBranchId == null) return 'Choose a branch';
-    return _branches.where((b) => b.id == _adminBranchId).map((b) => b.name).join();
+    return _branches
+        .where((b) => b.id == _adminBranchId)
+        .map((b) => b.name)
+        .join();
   }
 
   @override
   void initState() {
     super.initState();
+    stockChanged.addListener(_onStockChanged);
     _init();
   }
 
   @override
   void dispose() {
+    stockChanged.removeListener(_onStockChanged);
     _searchCtrl.dispose();
     _searchFocus.dispose();
     _cashCtrl.dispose();
     _partCtrl.dispose();
     super.dispose();
+  }
+
+  void _onStockChanged() {
+    if (mounted && _loadedOnce) _refreshAll(silent: true);
   }
 
   @override
@@ -119,7 +129,10 @@ class _SaleScreenState extends State<SaleScreen> {
   }
 
   Future<void> _refreshAll({bool silent = false}) async {
-    await Future.wait([_searchItems(silent: silent), _loadHistory(silent: true)]);
+    await Future.wait([
+      _searchItems(silent: silent),
+      _loadHistory(silent: true),
+    ]);
   }
 
   Future<void> _searchItems({bool silent = false}) async {
@@ -133,7 +146,11 @@ class _SaleScreenState extends State<SaleScreen> {
     }
     if (!silent) setState(() => _itemsLoading = true);
     try {
-      final res = await _repo.searchItems(branchId: bid, query: _search, category: _category);
+      final res = await _repo.searchItems(
+        branchId: bid,
+        query: _search,
+        category: _category,
+      );
       if (!mounted) return;
       setState(() {
         _items = res;
@@ -164,7 +181,8 @@ class _SaleScreenState extends State<SaleScreen> {
 
   // ---- Cart --------------------------------------------------------------------
 
-  double _priceOf(SaleItem item) => _saleType == 'wholesale' ? item.wholesale : item.retail;
+  double _priceOf(SaleItem item) =>
+      _saleType == 'wholesale' ? item.wholesale : item.retail;
 
   double get _total {
     var t = 0.0;
@@ -181,7 +199,11 @@ class _SaleScreenState extends State<SaleScreen> {
     final line = _cart[item.itemId];
     final cur = line?.qty ?? 0;
     if (cur + 1 > item.available) {
-      empToast(context, 'Only ${empQty(item.available)} available for ${item.name}.', error: true);
+      empToast(
+        context,
+        'Only ${empQty(item.available)} available for ${item.name}.',
+        error: true,
+      );
       return;
     }
     setState(() {
@@ -198,17 +220,61 @@ class _SaleScreenState extends State<SaleScreen> {
       return;
     }
     if (next > line.item.available) {
-      empToast(context, 'Only ${empQty(line.item.available)} available.', error: true);
+      empToast(
+        context,
+        'Only ${empQty(line.item.available)} available.',
+        error: true,
+      );
       return;
     }
     setState(() => line.qty = next);
   }
 
+  Future<void> _clearCart({VoidCallback? onChanged}) async {
+    if (_cart.isEmpty &&
+        _customer == null &&
+        _cashCtrl.text.isEmpty &&
+        _partCtrl.text.isEmpty) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear this sale?'),
+        content: const Text(
+          'All items and sale details entered so far will be removed.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep sale'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear sale'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    setState(() {
+      _cart.clear();
+      _customer = null;
+      _cashCtrl.clear();
+      _partCtrl.clear();
+      _method = 'cash';
+      _partMethod = 'cash';
+      _formError = null;
+    });
+    onChanged?.call();
+  }
+
   // ---- Checkout ------------------------------------------------------------------
 
   double? get _cashReceived => double.tryParse(_cashCtrl.text.trim());
-  double? get _partAmount =>
-      _partCtrl.text.trim().isEmpty ? 0 : double.tryParse(_partCtrl.text.trim());
+  double? get _partAmount => _partCtrl.text.trim().isEmpty
+      ? 0
+      : double.tryParse(_partCtrl.text.trim());
 
   Future<void> _complete({bool fromSheet = false}) async {
     setState(() => _formError = null);
@@ -222,14 +288,19 @@ class _SaleScreenState extends State<SaleScreen> {
       return;
     }
     if (_method == 'credit' && _customer == null) {
-      setState(() => _formError = 'Credit sales need a customer. Add one below.');
+      setState(
+        () => _formError = 'Credit sales need a customer. Add one below.',
+      );
       return;
     }
     double? cashGiven;
     if (_method == 'cash') {
       cashGiven = _cashReceived;
       if (cashGiven == null || cashGiven < _total) {
-        setState(() => _formError = 'Cash received must cover the total of ${empMk(_total)}.');
+        setState(
+          () => _formError =
+              'Cash received must cover the total of ${empMk(_total)}.',
+        );
         return;
       }
     }
@@ -237,7 +308,10 @@ class _SaleScreenState extends State<SaleScreen> {
     if (_method == 'credit') {
       final p = _partAmount;
       if (p == null || p < 0 || p > _total) {
-        setState(() => _formError = 'Part-payment must be between 0 and ${empMk(_total)}.');
+        setState(
+          () => _formError =
+              'Part-payment must be between 0 and ${empMk(_total)}.',
+        );
         return;
       }
       part = p;
@@ -246,12 +320,16 @@ class _SaleScreenState extends State<SaleScreen> {
     setState(() => _processing = true);
     final saleTotal = _total;
     final cashGivenForReceipt = _method == 'cash' ? cashGiven : null;
-    final changeForReceipt =
-        (_method == 'cash' && cashGiven != null) ? cashGiven - saleTotal : null;
+    final changeForReceipt = (_method == 'cash' && cashGiven != null)
+        ? cashGiven - saleTotal
+        : null;
     try {
       final receipt = await _repo.createSale(
         branchId: bid,
-        lines: [for (final l in _cart.values) {'item_id': l.item.itemId, 'quantity': l.qty}],
+        lines: [
+          for (final l in _cart.values)
+            {'item_id': l.item.itemId, 'quantity': l.qty},
+        ],
         saleType: _saleType,
         method: _method,
         customerId: _customer?.id,
@@ -291,8 +369,12 @@ class _SaleScreenState extends State<SaleScreen> {
     }
   }
 
-  Future<void> _openReceipt(Map<String, dynamic> receipt,
-      {double? cashReceived, double? change, required bool isReprint}) async {
+  Future<void> _openReceipt(
+    Map<String, dynamic> receipt, {
+    double? cashReceived,
+    double? change,
+    required bool isReprint,
+  }) async {
     await _showSaleSheet(
       context,
       builder: (_) => _ReceiptSheet(
@@ -334,7 +416,8 @@ class _SaleScreenState extends State<SaleScreen> {
         child: LayoutBuilder(
           builder: (context, c) {
             final wide = c.maxWidth >= empWideBreakpoint;
-            final showBar = !wide &&
+            final showBar =
+                !wide &&
                 !_isStock &&
                 !_historyMode &&
                 _cart.isNotEmpty &&
@@ -342,7 +425,12 @@ class _SaleScreenState extends State<SaleScreen> {
             return Stack(
               children: [
                 SingleChildScrollView(
-                  padding: EdgeInsets.fromLTRB(wide ? 32 : 18, wide ? 28 : 14, wide ? 32 : 18, 24),
+                  padding: EdgeInsets.fromLTRB(
+                    wide ? 32 : 18,
+                    wide ? 28 : 14,
+                    wide ? 32 : 18,
+                    24,
+                  ),
                   child: Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 1080),
@@ -372,7 +460,11 @@ class _SaleScreenState extends State<SaleScreen> {
         color: empPrimary,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
-          BoxShadow(color: empPrimary.withValues(alpha: 0.35), blurRadius: 12, offset: const Offset(0, 4)),
+          BoxShadow(
+            color: empPrimary.withValues(alpha: 0.35),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
         ],
       ),
       child: Row(
@@ -382,10 +474,18 @@ class _SaleScreenState extends State<SaleScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('$_count ${_count == 1 ? 'item' : 'items'}',
-                    style: empSans(12, color: Colors.white70)),
-                Text(empMk(_total),
-                    style: empMono(17, weight: FontWeight.w700, color: Colors.white)),
+                Text(
+                  '$_count ${_count == 1 ? 'item' : 'items'}',
+                  style: empSans(12, color: Colors.white70),
+                ),
+                Text(
+                  empMk(_total),
+                  style: empMono(
+                    17,
+                    weight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
               ],
             ),
           ),
@@ -396,7 +496,9 @@ class _SaleScreenState extends State<SaleScreen> {
               foregroundColor: empPrimary,
               minimumSize: const Size(0, 46),
               textStyle: empSans(14, weight: FontWeight.w700),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             child: const Text('View cart'),
           ),
@@ -415,7 +517,7 @@ class _SaleScreenState extends State<SaleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _checkoutCard(true),
+              _checkoutCard(true, onChanged: () => setSheet(() {})),
               const SizedBox(height: 10),
               SizedBox(
                 height: 54,
@@ -431,14 +533,24 @@ class _SaleScreenState extends State<SaleScreen> {
                       ? const SizedBox(
                           width: 22,
                           height: 22,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
                       : Text('Complete sale · ${empMk(_total)}'),
                 ),
               ),
               if (_formError != null) ...[
                 const SizedBox(height: 8),
-                Text(_formError!,
-                    style: empSans(12.5, weight: FontWeight.w600, color: empDanger)),
+                Text(
+                  _formError!,
+                  style: empSans(
+                    12.5,
+                    weight: FontWeight.w600,
+                    color: empDanger,
+                  ),
+                ),
               ],
             ],
           ),
@@ -454,11 +566,15 @@ class _SaleScreenState extends State<SaleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Sales are handled at the counter',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+            Text(
+              'Sales are handled at the counter',
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+            ),
             SizedBox(height: 6),
-            Text('Your role records stock, not sales. Head to the Stock tab to receive deliveries.',
-                style: TextStyle(fontSize: 13)),
+            Text(
+              'Your role records stock, not sales. Head to the Stock tab to receive deliveries.',
+              style: TextStyle(fontSize: 13),
+            ),
           ],
         ),
       );
@@ -470,7 +586,12 @@ class _SaleScreenState extends State<SaleScreen> {
         const SizedBox(height: 14),
         if (_isAdmin) ...[_adminBranchCard(), const SizedBox(height: 14)],
         if (_historyMode)
-          _HistoryBlock(sales: _today, loading: _historyLoading, onTap: _reprint, onRefresh: () => _loadHistory())
+          _HistoryBlock(
+            sales: _today,
+            loading: _historyLoading,
+            onTap: _reprint,
+            onRefresh: () => _loadHistory(),
+          )
         else if (wide)
           _desktop()
         else
@@ -486,8 +607,10 @@ class _SaleScreenState extends State<SaleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(_historyMode ? 'Today’s sales' : 'New sale',
-                  style: empSans(22, weight: FontWeight.w700, color: empInk)),
+              Text(
+                _historyMode ? 'Today’s sales' : 'New sale',
+                style: empSans(22, weight: FontWeight.w700, color: empInk),
+              ),
               const SizedBox(height: 2),
               Text(_branchLabel, style: empSans(12.5, color: empMuted)),
             ],
@@ -503,7 +626,11 @@ class _SaleScreenState extends State<SaleScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _modeTab('Sell', !_historyMode, () => setState(() => _historyMode = false)),
+              _modeTab(
+                'Sell',
+                !_historyMode,
+                () => setState(() => _historyMode = false),
+              ),
               _modeTab('History', _historyMode, () {
                 setState(() => _historyMode = true);
                 _loadHistory();
@@ -524,9 +651,14 @@ class _SaleScreenState extends State<SaleScreen> {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Text(label,
-              style: empSans(13,
-                  weight: FontWeight.w600, color: active ? Colors.white : empMuted)),
+          child: Text(
+            label,
+            style: empSans(
+              13,
+              weight: FontWeight.w600,
+              color: active ? Colors.white : empMuted,
+            ),
+          ),
         ),
       ),
     );
@@ -545,9 +677,15 @@ class _SaleScreenState extends State<SaleScreen> {
           child: DropdownButton<String>(
             value: _adminBranchId,
             isExpanded: true,
-            hint: Text('Choose a branch to sell from', style: empSans(13.5, color: empMuted)),
+            hint: Text(
+              'Choose a branch to sell from',
+              style: empSans(13.5, color: empMuted),
+            ),
             style: empSans(14, color: empInk),
-            items: [for (final b in _branches) DropdownMenuItem(value: b.id, child: Text(b.name))],
+            items: [
+              for (final b in _branches)
+                DropdownMenuItem(value: b.id, child: Text(b.name)),
+            ],
             onChanged: (v) {
               setState(() => _adminBranchId = v);
               _refreshAll();
@@ -585,13 +723,21 @@ class _SaleScreenState extends State<SaleScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(child: SingleChildScrollView(child: _checkoutCard(selling))),
+                Expanded(
+                  child: SingleChildScrollView(child: _checkoutCard(selling)),
+                ),
                 const SizedBox(height: 10),
                 _completeButton(selling),
                 if (_formError != null) ...[
                   const SizedBox(height: 8),
-                  Text(_formError!,
-                      style: empSans(12.5, weight: FontWeight.w600, color: empDanger)),
+                  Text(
+                    _formError!,
+                    style: empSans(
+                      12.5,
+                      weight: FontWeight.w600,
+                      color: empDanger,
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -683,8 +829,14 @@ class _SaleScreenState extends State<SaleScreen> {
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: active ? empPrimary : empBorder),
           ),
-          child: Text(label,
-              style: empSans(13, weight: FontWeight.w600, color: active ? Colors.white : empMuted)),
+          child: Text(
+            label,
+            style: empSans(
+              13,
+              weight: FontWeight.w600,
+              color: active ? Colors.white : empMuted,
+            ),
+          ),
         ),
       ),
     );
@@ -692,7 +844,10 @@ class _SaleScreenState extends State<SaleScreen> {
 
   Widget _resultsList() {
     if (_branchId == null) {
-      return const EmpEmpty(icon: Icons.storefront_outlined, message: 'Choose a branch above to start selling.');
+      return const EmpEmpty(
+        icon: Icons.storefront_outlined,
+        message: 'Choose a branch above to start selling.',
+      );
     }
     if (_itemsLoading) {
       return const Padding(
@@ -724,27 +879,62 @@ class _SaleScreenState extends State<SaleScreen> {
   }
 
   /// Right panel (desktop) / cart sheet content (mobile).
-  Widget _checkoutCard(bool selling) {
+  Widget _checkoutCard(bool selling, {VoidCallback? onChanged}) {
     return EmpCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Cart ($_count ${_count == 1 ? 'item' : 'items'})',
-              style: empSans(15, weight: FontWeight.w700, color: empInk)),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Cart ($_count ${_count == 1 ? 'item' : 'items'})',
+                  style: empSans(15, weight: FontWeight.w700, color: empInk),
+                ),
+              ),
+              if (_cart.isNotEmpty)
+                TextButton.icon(
+                  onPressed: _processing
+                      ? null
+                      : () => _clearCart(onChanged: onChanged),
+                  icon: const Icon(Icons.delete_outline, size: 17),
+                  label: const Text('Clear'),
+                  style: TextButton.styleFrom(foregroundColor: empDanger),
+                ),
+            ],
+          ),
           const SizedBox(height: 10),
           if (_cart.isEmpty)
-            Text('Tap + on an item to add it.', style: empSans(13, color: empMuted))
+            Text(
+              'Tap + on an item to add it.',
+              style: empSans(13, color: empMuted),
+            )
           else
-            for (final l in _cart.values) _CartLineRow(line: l, price: _priceOf(l.item), onBump: _bump),
+            for (final l in _cart.values)
+              _CartLineRow(line: l, price: _priceOf(l.item), onBump: _bump),
           const Divider(height: 20, color: empBorder),
-          Text('Sale type', style: empSans(12.5, weight: FontWeight.w600, color: empMuted)),
+          Text(
+            'Sale type',
+            style: empSans(12.5, weight: FontWeight.w600, color: empMuted),
+          ),
           const SizedBox(height: 6),
           Row(
             children: [
-              Expanded(child: _typeTab('Retail', _saleType == 'retail', () => setState(() => _saleType = 'retail'))),
+              Expanded(
+                child: _typeTab(
+                  'Retail',
+                  _saleType == 'retail',
+                  () => setState(() => _saleType = 'retail'),
+                ),
+              ),
               const SizedBox(width: 8),
               Expanded(
-                  child: _typeTab('Wholesale', _saleType == 'wholesale', () => setState(() => _saleType = 'wholesale'))),
+                child: _typeTab(
+                  'Wholesale',
+                  _saleType == 'wholesale',
+                  () => setState(() => _saleType = 'wholesale'),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -767,14 +957,25 @@ class _SaleScreenState extends State<SaleScreen> {
           const SizedBox(height: 6),
           Row(
             children: [
-              Expanded(child: Text('Total', style: empSans(15, weight: FontWeight.w700, color: empInk))),
-              Text(empMk(_total), style: empMono(19, weight: FontWeight.w700, color: empPrimary)),
+              Expanded(
+                child: Text(
+                  'Total',
+                  style: empSans(15, weight: FontWeight.w700, color: empInk),
+                ),
+              ),
+              Text(
+                empMk(_total),
+                style: empMono(19, weight: FontWeight.w700, color: empPrimary),
+              ),
             ],
           ),
           if (!selling)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text('Choose a branch to enable checkout.', style: empSans(12, color: empMuted)),
+              child: Text(
+                'Choose a branch to enable checkout.',
+                style: empSans(12, color: empMuted),
+              ),
             ),
         ],
       ),
@@ -792,11 +993,20 @@ class _SaleScreenState extends State<SaleScreen> {
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(9),
-            border: Border.all(color: active ? empPrimary : empBorder, width: active ? 1.5 : 1),
+            border: Border.all(
+              color: active ? empPrimary : empBorder,
+              width: active ? 1.5 : 1,
+            ),
           ),
           child: Center(
-            child: Text(label,
-                style: empSans(13.5, weight: FontWeight.w600, color: active ? empPrimary : empMuted)),
+            child: Text(
+              label,
+              style: empSans(
+                13.5,
+                weight: FontWeight.w600,
+                color: active ? empPrimary : empMuted,
+              ),
+            ),
           ),
         ),
       ),
@@ -807,11 +1017,19 @@ class _SaleScreenState extends State<SaleScreen> {
     return SizedBox(
       height: 56,
       child: FilledButton(
-        onPressed: (!selling || _processing || _cart.isEmpty) ? null : _complete,
+        onPressed: (!selling || _processing || _cart.isEmpty)
+            ? null
+            : _complete,
         style: empPrimaryButton(height: 56),
         child: _processing
             ? const SizedBox(
-                width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
             : Text('Complete sale · ${empMk(_total)}'),
       ),
     );
@@ -827,7 +1045,12 @@ class _ItemRow extends StatelessWidget {
   final double price;
   final String saleType;
   final VoidCallback onAdd;
-  const _ItemRow({required this.item, required this.price, required this.saleType, required this.onAdd});
+  const _ItemRow({
+    required this.item,
+    required this.price,
+    required this.saleType,
+    required this.onAdd,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -842,8 +1065,14 @@ class _ItemRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.name,
-                      style: empSans(14, weight: FontWeight.w600, color: enabled ? empInk : empMuted)),
+                  Text(
+                    item.name,
+                    style: empSans(
+                      14,
+                      weight: FontWeight.w600,
+                      color: enabled ? empInk : empMuted,
+                    ),
+                  ),
                   const SizedBox(height: 2),
                   Text(
                     enabled
@@ -864,7 +1093,9 @@ class _ItemRow extends StatelessWidget {
                   backgroundColor: empPrimary,
                   foregroundColor: Colors.white,
                   disabledBackgroundColor: empBorder,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   padding: EdgeInsets.zero,
                 ),
                 child: const Icon(Icons.add, size: 24),
@@ -885,7 +1116,11 @@ class _CartLineRow extends StatelessWidget {
   final _Line line;
   final double price;
   final void Function(String id, double delta) onBump;
-  const _CartLineRow({required this.line, required this.price, required this.onBump});
+  const _CartLineRow({
+    required this.line,
+    required this.price,
+    required this.onBump,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -897,9 +1132,14 @@ class _CartLineRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(line.item.name, style: empSans(13.5, weight: FontWeight.w600, color: empInk)),
-                Text('${empMk(price)} each · ${empMk(line.qty * price)}',
-                    style: empSans(12, color: empMuted)),
+                Text(
+                  line.item.name,
+                  style: empSans(13.5, weight: FontWeight.w600, color: empInk),
+                ),
+                Text(
+                  '${empMk(price)} each · ${empMk(line.qty * price)}',
+                  style: empSans(12, color: empMuted),
+                ),
               ],
             ),
           ),
@@ -920,7 +1160,14 @@ class _CartLineRow extends StatelessWidget {
                 SizedBox(
                   width: 30,
                   child: Center(
-                    child: Text(empQty(line.qty), style: empMono(13.5, weight: FontWeight.w700, color: empInk)),
+                    child: Text(
+                      empQty(line.qty),
+                      style: empMono(
+                        13.5,
+                        weight: FontWeight.w700,
+                        color: empInk,
+                      ),
+                    ),
                   ),
                 ),
                 IconButton(
@@ -961,8 +1208,10 @@ class _CustomerBlock extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Customer${required ? ' (required for credit)' : ' (optional)'}',
-            style: empSans(12.5, weight: FontWeight.w600, color: empMuted)),
+        Text(
+          'Customer${required ? ' (required for credit)' : ' (optional)'}',
+          style: empSans(12.5, weight: FontWeight.w600, color: empMuted),
+        ),
         const SizedBox(height: 6),
         if (customer == null)
           SizedBox(
@@ -973,7 +1222,9 @@ class _CustomerBlock extends StatelessWidget {
                 foregroundColor: empPrimary,
                 minimumSize: const Size(0, 44),
                 side: const BorderSide(color: empBorder),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               icon: const Icon(Icons.person_add_outlined, size: 18),
               label: const Text('Add customer'),
@@ -992,15 +1243,32 @@ class _CustomerBlock extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(customer!.name, style: empSans(13.5, weight: FontWeight.w700, color: empPrimary)),
+                      Text(
+                        customer!.name,
+                        style: empSans(
+                          13.5,
+                          weight: FontWeight.w700,
+                          color: empPrimary,
+                        ),
+                      ),
                       if (customer!.balance > 0)
-                        Text('Owes ${empMk(customer!.balance)}', style: empSans(11.5, color: empPrimary)),
+                        Text(
+                          'Owes ${empMk(customer!.balance)}',
+                          style: empSans(11.5, color: empPrimary),
+                        ),
                     ],
                   ),
                 ),
                 TextButton(
                   onPressed: onPick,
-                  child: Text('Change', style: empSans(12.5, weight: FontWeight.w600, color: empPrimary)),
+                  child: Text(
+                    'Change',
+                    style: empSans(
+                      12.5,
+                      weight: FontWeight.w600,
+                      color: empPrimary,
+                    ),
+                  ),
                 ),
                 IconButton(
                   icon: const Icon(Icons.close, size: 17, color: empPrimary),
@@ -1045,7 +1313,10 @@ class _CustomerSheetState extends State<_CustomerSheet> {
   Future<void> _search(String q) async {
     setState(() => _searching = true);
     try {
-      final res = await widget.repo.searchCustomers(branchId: widget.branchId, query: q);
+      final res = await widget.repo.searchCustomers(
+        branchId: widget.branchId,
+        query: q,
+      );
       if (!mounted) return;
       if (_searchCtrl.text != q) return;
       setState(() {
@@ -1105,14 +1376,23 @@ class _CustomerSheetState extends State<_CustomerSheet> {
               padding: EdgeInsets.symmetric(vertical: 10),
               child: Center(
                 child: SizedBox(
-                    width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: empPrimary)),
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: empPrimary,
+                  ),
+                ),
               ),
             )
           else
             for (final c in _results)
               ListTile(
                 contentPadding: EdgeInsets.zero,
-                title: Text(c.name, style: empSans(14, weight: FontWeight.w600, color: empInk)),
+                title: Text(
+                  c.name,
+                  style: empSans(14, weight: FontWeight.w600, color: empInk),
+                ),
                 subtitle: Text(
                   '${c.phone.isEmpty ? 'no phone' : c.phone}${c.balance > 0 ? ' · owes ${empMk(c.balance)}' : ''}',
                   style: empSans(12, color: empMuted),
@@ -1123,11 +1403,17 @@ class _CustomerSheetState extends State<_CustomerSheet> {
           TextButton.icon(
             onPressed: () => setState(() => _adding = !_adding),
             icon: Icon(_adding ? Icons.remove : Icons.add, size: 17),
-            label: Text(_adding ? 'Hide new-customer form' : 'New customer',
-                style: empSans(13, weight: FontWeight.w600, color: empPrimary)),
+            label: Text(
+              _adding ? 'Hide new-customer form' : 'New customer',
+              style: empSans(13, weight: FontWeight.w600, color: empPrimary),
+            ),
           ),
           if (_adding) ...[
-            TextField(controller: _nameCtrl, style: empSans(14, color: empInk), decoration: empField('Full name')),
+            TextField(
+              controller: _nameCtrl,
+              style: empSans(14, color: empInk),
+              decoration: empField('Full name'),
+            ),
             const SizedBox(height: 10),
             TextField(
               controller: _phoneCtrl,
@@ -1137,7 +1423,10 @@ class _CustomerSheetState extends State<_CustomerSheet> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
-              Text(_error!, style: empSans(12.5, weight: FontWeight.w600, color: empDanger)),
+              Text(
+                _error!,
+                style: empSans(12.5, weight: FontWeight.w600, color: empDanger),
+              ),
             ],
             const SizedBox(height: 12),
             FilledButton(
@@ -1145,7 +1434,13 @@ class _CustomerSheetState extends State<_CustomerSheet> {
               style: empPrimaryButton(height: 46),
               child: _saving
                   ? const SizedBox(
-                      width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
                   : const Text('Save customer'),
             ),
           ],
@@ -1189,7 +1484,10 @@ class _PaymentBlock extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Payment', style: empSans(12.5, weight: FontWeight.w600, color: empMuted)),
+        Text(
+          'Payment',
+          style: empSans(12.5, weight: FontWeight.w600, color: empMuted),
+        ),
         const SizedBox(height: 6),
         Wrap(
           spacing: 8,
@@ -1199,15 +1497,22 @@ class _PaymentBlock extends StatelessWidget {
               ChoiceChip(
                 label: Row(
                   mainAxisSize: MainAxisSize.min,
-                  children: [Icon(icon, size: 15), const SizedBox(width: 5), Text(label)],
+                  children: [
+                    Icon(icon, size: 15),
+                    const SizedBox(width: 5),
+                    Text(label),
+                  ],
                 ),
                 selected: method == v,
                 onSelected: (_) => onMethod(v),
                 selectedColor: empPrimary,
                 backgroundColor: empSurface,
                 side: BorderSide(color: method == v ? empPrimary : empBorder),
-                labelStyle: empSans(13,
-                    weight: FontWeight.w600, color: method == v ? Colors.white : empMuted),
+                labelStyle: empSans(
+                  13,
+                  weight: FontWeight.w600,
+                  color: method == v ? Colors.white : empMuted,
+                ),
                 showCheckmark: false,
               ),
           ],
@@ -1223,8 +1528,10 @@ class _PaymentBlock extends StatelessWidget {
           ),
           if (cashGiven != null && cashGiven >= total) ...[
             const SizedBox(height: 6),
-            Text('Change: ${empMk(cashGiven - total)}',
-                style: empSans(13.5, weight: FontWeight.w700, color: empSuccess)),
+            Text(
+              'Change: ${empMk(cashGiven - total)}',
+              style: empSans(13.5, weight: FontWeight.w700, color: empSuccess),
+            ),
           ],
         ],
         if (method == 'credit') ...[
@@ -1234,22 +1541,34 @@ class _PaymentBlock extends StatelessWidget {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: empSans(14, color: empInk),
             onChanged: (_) => (context as Element).markNeedsBuild(),
-            decoration: empField('Part-payment now (optional)', hint: '0 if nothing paid'),
+            decoration: empField(
+              'Part-payment now (optional)',
+              hint: '0 if nothing paid',
+            ),
           ),
           const SizedBox(height: 6),
           Wrap(
             spacing: 8,
             children: [
-              for (final (v, label) in [('cash', 'Cash'), ('mobile_money', 'MoMo'), ('card', 'Card')])
+              for (final (v, label) in [
+                ('cash', 'Cash'),
+                ('mobile_money', 'MoMo'),
+                ('card', 'Card'),
+              ])
                 ChoiceChip(
                   label: Text(label),
                   selected: partMethod == v,
                   onSelected: (_) => onPartMethod(v),
                   selectedColor: empPrimaryTint,
                   backgroundColor: empSurface,
-                  side: BorderSide(color: partMethod == v ? empPrimary : empBorder),
-                  labelStyle: empSans(12.5,
-                      weight: FontWeight.w600, color: partMethod == v ? empPrimary : empMuted),
+                  side: BorderSide(
+                    color: partMethod == v ? empPrimary : empBorder,
+                  ),
+                  labelStyle: empSans(
+                    12.5,
+                    weight: FontWeight.w600,
+                    color: partMethod == v ? empPrimary : empMuted,
+                  ),
                   showCheckmark: false,
                 ),
             ],
@@ -1298,17 +1617,22 @@ class _HistoryBlock extends StatelessWidget {
           var time = '';
           try {
             final d = DateTime.parse(s.time).toLocal();
-            time = '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+            time =
+                '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
           } catch (_) {}
           return Material(
             color: Colors.transparent,
             child: InkWell(
               onTap: () => onTap(s),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 11,
+                ),
                 decoration: BoxDecoration(
-                  border:
-                      i == sales.length - 1 ? null : const Border(bottom: BorderSide(color: empBorder)),
+                  border: i == sales.length - 1
+                      ? null
+                      : const Border(bottom: BorderSide(color: empBorder)),
                 ),
                 child: Row(
                   children: [
@@ -1316,13 +1640,29 @@ class _HistoryBlock extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(s.receipt, style: empSans(13, weight: FontWeight.w600, color: empInk)),
-                          Text('$time · ${_methodName(s.method)}',
-                              style: empSans(11.5, color: empMuted)),
+                          Text(
+                            s.receipt,
+                            style: empSans(
+                              13,
+                              weight: FontWeight.w600,
+                              color: empInk,
+                            ),
+                          ),
+                          Text(
+                            '$time · ${_methodName(s.method)}',
+                            style: empSans(11.5, color: empMuted),
+                          ),
                         ],
                       ),
                     ),
-                    Text(empMk(s.total), style: empMono(13, weight: FontWeight.w700, color: empInk)),
+                    Text(
+                      empMk(s.total),
+                      style: empMono(
+                        13,
+                        weight: FontWeight.w700,
+                        color: empInk,
+                      ),
+                    ),
                     const SizedBox(width: 4),
                     const Icon(Icons.chevron_right, size: 17, color: empMuted),
                   ],
@@ -1353,7 +1693,10 @@ class _HistoryBlock extends StatelessWidget {
 // RECEIPT SHEET (dialog on desktop, full-screen sheet on mobile)
 // ============================================================================
 
-Future<T?> _showSaleSheet<T>(BuildContext context, {required WidgetBuilder builder}) {
+Future<T?> _showSaleSheet<T>(
+  BuildContext context, {
+  required WidgetBuilder builder,
+}) {
   final wide = MediaQuery.of(context).size.width >= empWideBreakpoint;
   if (wide) {
     return showDialog<T>(
@@ -1423,8 +1766,12 @@ class _ReceiptSheetState extends State<_ReceiptSheet> {
   Future<void> _print() async {
     setState(() => _busy = true);
     try {
-      await ReceiptService.printReceipt(widget.receipt,
-          format: _pageFormat, cashReceived: widget.cashReceived, change: widget.change);
+      await ReceiptService.printReceipt(
+        widget.receipt,
+        format: _pageFormat,
+        cashReceived: widget.cashReceived,
+        change: widget.change,
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1433,8 +1780,12 @@ class _ReceiptSheetState extends State<_ReceiptSheet> {
   Future<void> _share() async {
     setState(() => _busy = true);
     try {
-      await ReceiptService.shareReceipt(widget.receipt,
-          format: _pageFormat, cashReceived: widget.cashReceived, change: widget.change);
+      await ReceiptService.shareReceipt(
+        widget.receipt,
+        format: _pageFormat,
+        cashReceived: widget.cashReceived,
+        change: widget.change,
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1449,7 +1800,12 @@ class _ReceiptSheetState extends State<_ReceiptSheet> {
     final due = ((r['balance_due'] as num?) ?? 0).toDouble();
     final method = (r['payment_method'] as String?) ?? '';
     final body = Padding(
-      padding: EdgeInsets.fromLTRB(24, 12, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+      padding: EdgeInsets.fromLTRB(
+        24,
+        12,
+        24,
+        MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1458,7 +1814,10 @@ class _ReceiptSheetState extends State<_ReceiptSheet> {
             child: Container(
               width: 40,
               height: 4,
-              decoration: BoxDecoration(color: empBorder, borderRadius: BorderRadius.circular(2)),
+              decoration: BoxDecoration(
+                color: empBorder,
+                borderRadius: BorderRadius.circular(2),
+              ),
             ),
           ),
           const SizedBox(height: 12),
@@ -1470,8 +1829,18 @@ class _ReceiptSheetState extends State<_ReceiptSheet> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Sale complete', style: empSans(18, weight: FontWeight.w700, color: empInk)),
-                    Text('Receipt ${r['receipt_number'] ?? ''}', style: empSans(13, color: empMuted)),
+                    Text(
+                      'Sale complete',
+                      style: empSans(
+                        18,
+                        weight: FontWeight.w700,
+                        color: empInk,
+                      ),
+                    ),
+                    Text(
+                      'Receipt ${r['receipt_number'] ?? ''}',
+                      style: empSans(13, color: empMuted),
+                    ),
                   ],
                 ),
               ),
@@ -1484,7 +1853,10 @@ class _ReceiptSheetState extends State<_ReceiptSheet> {
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(color: empBg, borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(
+              color: empBg,
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: Column(
               children: [
                 for (final it in items)
@@ -1493,25 +1865,54 @@ class _ReceiptSheetState extends State<_ReceiptSheet> {
                     child: Row(
                       children: [
                         Expanded(
-                          child: Text('${it['name']} × ${it['quantity']}',
-                              style: empSans(13, color: empInk)),
+                          child: Text(
+                            '${it['name']} × ${it['quantity']}',
+                            style: empSans(13, color: empInk),
+                          ),
                         ),
-                        Text(empMk((it['subtotal'] as num).toDouble()),
-                            style: empMono(13, weight: FontWeight.w600, color: empInk)),
+                        Text(
+                          empMk((it['subtotal'] as num).toDouble()),
+                          style: empMono(
+                            13,
+                            weight: FontWeight.w600,
+                            color: empInk,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 const Divider(color: empBorder),
                 Row(
                   children: [
-                    Expanded(child: Text('Total', style: empSans(14, weight: FontWeight.w700, color: empInk))),
-                    Text(empMk(total), style: empMono(16, weight: FontWeight.w700, color: empPrimary)),
+                    Expanded(
+                      child: Text(
+                        'Total',
+                        style: empSans(
+                          14,
+                          weight: FontWeight.w700,
+                          color: empInk,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      empMk(total),
+                      style: empMono(
+                        16,
+                        weight: FontWeight.w700,
+                        color: empPrimary,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 2),
                 Row(
                   children: [
-                    Expanded(child: Text('Paid ($method)', style: empSans(12.5, color: empMuted))),
+                    Expanded(
+                      child: Text(
+                        'Paid ($method)',
+                        style: empSans(12.5, color: empMuted),
+                      ),
+                    ),
                     Text(empMk(paid), style: empMono(12.5, color: empMuted)),
                   ],
                 ),
@@ -1519,17 +1920,39 @@ class _ReceiptSheetState extends State<_ReceiptSheet> {
                   Row(
                     children: [
                       Expanded(
-                          child: Text('Balance owing',
-                              style: empSans(12.5, weight: FontWeight.w700, color: empDanger))),
-                      Text(empMk(due), style: empMono(12.5, weight: FontWeight.w700, color: empDanger)),
+                        child: Text(
+                          'Balance owing',
+                          style: empSans(
+                            12.5,
+                            weight: FontWeight.w700,
+                            color: empDanger,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        empMk(due),
+                        style: empMono(
+                          12.5,
+                          weight: FontWeight.w700,
+                          color: empDanger,
+                        ),
+                      ),
                     ],
                   ),
                 if (widget.cashReceived != null) ...[
                   const SizedBox(height: 2),
                   Row(
                     children: [
-                      Expanded(child: Text('Cash received', style: empSans(12.5, color: empMuted))),
-                      Text(empMk(widget.cashReceived!), style: empMono(12.5, color: empMuted)),
+                      Expanded(
+                        child: Text(
+                          'Cash received',
+                          style: empSans(12.5, color: empMuted),
+                        ),
+                      ),
+                      Text(
+                        empMk(widget.cashReceived!),
+                        style: empMono(12.5, color: empMuted),
+                      ),
                     ],
                   ),
                 ],
@@ -1537,17 +1960,33 @@ class _ReceiptSheetState extends State<_ReceiptSheet> {
                   Row(
                     children: [
                       Expanded(
-                          child: Text('Change',
-                              style: empSans(12.5, weight: FontWeight.w700, color: empSuccess))),
-                      Text(empMk(widget.change!),
-                          style: empMono(12.5, weight: FontWeight.w700, color: empSuccess)),
+                        child: Text(
+                          'Change',
+                          style: empSans(
+                            12.5,
+                            weight: FontWeight.w700,
+                            color: empSuccess,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        empMk(widget.change!),
+                        style: empMono(
+                          12.5,
+                          weight: FontWeight.w700,
+                          color: empSuccess,
+                        ),
+                      ),
                     ],
                   ),
               ],
             ),
           ),
           const SizedBox(height: 12),
-          Text('Paper size', style: empSans(12.5, weight: FontWeight.w600, color: empMuted)),
+          Text(
+            'Paper size',
+            style: empSans(12.5, weight: FontWeight.w600, color: empMuted),
+          ),
           const SizedBox(height: 6),
           Row(
             children: [
@@ -1568,7 +2007,9 @@ class _ReceiptSheetState extends State<_ReceiptSheet> {
                     foregroundColor: empPrimary,
                     minimumSize: const Size(0, 50),
                     side: const BorderSide(color: empBorder),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   icon: const Icon(Icons.print_outlined, size: 19),
                   label: const Text('Print'),
@@ -1582,7 +2023,9 @@ class _ReceiptSheetState extends State<_ReceiptSheet> {
                     foregroundColor: empPrimary,
                     minimumSize: const Size(0, 50),
                     side: const BorderSide(color: empBorder),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   icon: const Icon(Icons.share_outlined, size: 19),
                   label: const Text('Share'),
@@ -1616,8 +2059,11 @@ class _ReceiptSheetState extends State<_ReceiptSheet> {
       selectedColor: empPrimary,
       backgroundColor: empSurface,
       side: BorderSide(color: active ? empPrimary : empBorder),
-      labelStyle:
-          empSans(12.5, weight: FontWeight.w600, color: active ? Colors.white : empMuted),
+      labelStyle: empSans(
+        12.5,
+        weight: FontWeight.w600,
+        color: active ? Colors.white : empMuted,
+      ),
       showCheckmark: false,
     );
   }

@@ -7,6 +7,7 @@ import '../../widgets/employeeShell.dart';
 import 'employeeHome.dart';
 import 'saleScreen.dart';
 import 'stockScreen.dart';
+import 'reportsScreen.dart';
 
 /// What '/home' should point to in main.dart, instead of EmployeeHomePage:
 ///
@@ -53,14 +54,17 @@ class _EmployeeHomeRouteState extends State<EmployeeHomeRoute> {
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
 
         if (snapshot.hasError || !snapshot.hasData) {
           // Session must have gone stale between routes — back to login
           // rather than showing a broken shell.
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+            Navigator.of(context)
+                .pushNamedAndRemoveUntil('/login', (route) => false);
           });
           return const Scaffold(body: SizedBox.shrink());
         }
@@ -74,7 +78,7 @@ class _EmployeeHomeRouteState extends State<EmployeeHomeRoute> {
             EmployeeHomeScreen(user: data.user, branchName: data.branchName),
             SaleScreen(user: data.user, branchName: data.branchName),
             StockScreen(user: data.user, branchName: data.branchName),
-            const Center(child: Text('Reports')),
+            EmployeeReportsScreen(user: data.user),
             const Center(child: Text('Settings')),
           ],
         );

@@ -101,7 +101,8 @@ class ItemStock {
     return StockStatus.ok;
   }
 
-  double get stockValue => batches.fold(0, (s, b) => s + b.qtyAvailable * b.buyingPrice);
+  double get stockValue =>
+      batches.fold(0, (s, b) => s + b.qtyAvailable * b.buyingPrice);
 
   /// "Where it is": branch name -> quantity, largest first.
   List<MapEntry<String, double>> get byBranch {
@@ -109,7 +110,8 @@ class ItemStock {
     for (final b in batches) {
       map[b.branchName] = (map[b.branchName] ?? 0) + b.qtyAvailable;
     }
-    final entries = map.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final entries = map.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
     return entries;
   }
 }
@@ -146,7 +148,8 @@ class LowStockRow {
     required this.reorderLevel,
   });
 
-  double get severity => reorderLevel <= 0 ? 0 : (qtyOnHand / reorderLevel).clamp(0.0, 1.0);
+  double get severity =>
+      reorderLevel <= 0 ? 0 : (qtyOnHand / reorderLevel).clamp(0.0, 1.0);
 }
 
 class StockMovement {
@@ -231,16 +234,21 @@ class InventoryRepository {
   final SupabaseClient _client = Supabase.instance.client;
 
   Future<List<InvBranch>> fetchBranches() async {
-    final rows = await _client
-        .from('branches')
-        .select('id, name')
-        .eq('is_active', true)
-        .order('name') as List;
-    return rows.map((r) => InvBranch(id: r['id'] as String, name: r['name'] as String)).toList();
+    final rows =
+        await _client
+                .from('branches')
+                .select('id, name')
+                .eq('is_active', true)
+                .order('name')
+            as List;
+    return rows
+        .map((r) => InvBranch(id: r['id'] as String, name: r['name'] as String))
+        .toList();
   }
 
   Future<List<String>> fetchCategories() async {
-    final rows = await _client.from('items').select('category').limit(2000) as List;
+    final rows =
+        await _client.from('items').select('category').limit(2000) as List;
     final cats = <String>{};
     for (final r in rows) {
       final c = (r['category'] as String?)?.trim();
@@ -254,11 +262,14 @@ class InventoryRepository {
   /// Search / category are applied client-side so the same fetch feeds
   /// the overview, low-stock, expiry and summary cards consistently.
   Future<List<ItemStock>> fetchOverview({String? branchId}) async {
-    dynamic q = _client.from('inventory').select(
-        'id, item_id, branch_id, batch_number, buying_price, retail_price, '
-        'wholesale_price, quantity_received, quantity_available, expiry_date, '
-        'received_date, items(id, name, category, unit, reorder_level, is_active), '
-        'branches(name)');
+    dynamic q = _client
+        .from('inventory')
+        .select(
+          'id, item_id, branch_id, batch_number, buying_price, retail_price, '
+          'wholesale_price, quantity_received, quantity_available, expiry_date, '
+          'received_date, items(id, name, category, unit, reorder_level, is_active), '
+          'branches(name)',
+        );
     if (branchId != null) q = q.eq('branch_id', branchId);
     final rows = await q.gt('quantity_available', 0).limit(2000) as List;
 
@@ -267,21 +278,24 @@ class InventoryRepository {
       final item = r['items'];
       final br = r['branches'];
       final itemMap = item is Map ? item : null;
-      batches.add(StockBatch(
-        id: r['id'] as String,
-        itemId: r['item_id'] as String,
-        itemName: (itemMap?['name'] as String?) ?? 'Unknown item',
-        branchId: r['branch_id'] as String,
-        branchName: (br is Map ? br['name'] as String? : null) ?? 'Unknown branch',
-        batchNumber: (r['batch_number'] as String?) ?? '—',
-        buyingPrice: (r['buying_price'] as num).toDouble(),
-        retailPrice: (r['retail_price'] as num).toDouble(),
-        wholesalePrice: (r['wholesale_price'] as num?)?.toDouble(),
-        qtyReceived: (r['quantity_received'] as num).toDouble(),
-        qtyAvailable: (r['quantity_available'] as num).toDouble(),
-        expiryDate: r['expiry_date'] as String?,
-        receivedDate: r['received_date'] as String?,
-      ));
+      batches.add(
+        StockBatch(
+          id: r['id'] as String,
+          itemId: r['item_id'] as String,
+          itemName: (itemMap?['name'] as String?) ?? 'Unknown item',
+          branchId: r['branch_id'] as String,
+          branchName:
+              (br is Map ? br['name'] as String? : null) ?? 'Unknown branch',
+          batchNumber: (r['batch_number'] as String?) ?? '—',
+          buyingPrice: (r['buying_price'] as num).toDouble(),
+          retailPrice: (r['retail_price'] as num).toDouble(),
+          wholesalePrice: (r['wholesale_price'] as num?)?.toDouble(),
+          qtyReceived: (r['quantity_received'] as num).toDouble(),
+          qtyAvailable: (r['quantity_available'] as num).toDouble(),
+          expiryDate: r['expiry_date'] as String?,
+          receivedDate: r['received_date'] as String?,
+        ),
+      );
     }
 
     final byItem = <String, List<StockBatch>>{};
@@ -299,17 +313,19 @@ class InventoryRepository {
     final items = <ItemStock>[];
     for (final entry in byItem.entries) {
       final m = meta[entry.key];
-      items.add(ItemStock(
-        itemId: entry.key,
-        itemName: entry.value.first.itemName,
-        category: (m?['category'] as String?)?.trim().isNotEmpty == true
-            ? (m!['category'] as String).trim()
-            : 'Uncategorised',
-        unit: (m?['unit'] as String?) ?? 'unit',
-        reorderLevel: ((m?['reorder_level'] as num?) ?? 10).toDouble(),
-        itemActive: (m?['is_active'] as bool?) ?? true,
-        batches: entry.value,
-      ));
+      items.add(
+        ItemStock(
+          itemId: entry.key,
+          itemName: entry.value.first.itemName,
+          category: (m?['category'] as String?)?.trim().isNotEmpty == true
+              ? (m!['category'] as String).trim()
+              : 'Uncategorised',
+          unit: (m?['unit'] as String?) ?? 'unit',
+          reorderLevel: ((m?['reorder_level'] as num?) ?? 10).toDouble(),
+          itemActive: (m?['is_active'] as bool?) ?? true,
+          batches: entry.value,
+        ),
+      );
     }
     items.sort((a, b) => a.itemName.compareTo(b.itemName));
     return items;
@@ -322,7 +338,8 @@ class InventoryRepository {
     var expired = 0;
     for (final item in items) {
       value += item.stockValue;
-      if (item.status == StockStatus.low || item.status == StockStatus.out) low++;
+      if (item.status == StockStatus.low || item.status == StockStatus.out)
+        low++;
       for (final b in item.batches) {
         final d = b.daysToExpiry;
         if (d == null) continue;
@@ -348,12 +365,14 @@ class InventoryRepository {
     if (branchId != null) q = q.eq('branch_id', branchId);
     final rows = await q.limit(500) as List;
     final list = rows
-        .map((r) => LowStockRow(
-              itemName: r['item_name'] as String,
-              branchName: (r['branch_name'] as String?) ?? 'Unknown branch',
-              qtyOnHand: (r['quantity_on_hand'] as num).toDouble(),
-              reorderLevel: (r['reorder_level'] as num).toDouble(),
-            ))
+        .map(
+          (r) => LowStockRow(
+            itemName: r['item_name'] as String,
+            branchName: (r['branch_name'] as String?) ?? 'Unknown branch',
+            qtyOnHand: (r['quantity_on_hand'] as num).toDouble(),
+            reorderLevel: (r['reorder_level'] as num).toDouble(),
+          ),
+        )
         .toList();
     // Worst first: lowest coverage ratio ahead.
     list.sort((a, b) => a.severity.compareTo(b.severity));
@@ -368,15 +387,19 @@ class InventoryRepository {
     DateTime? from,
     DateTime? to,
   }) async {
-    dynamic q = _client.from('stock_movements').select(
-        'id, movement_type, quantity, notes, created_at, performed_by, '
-        'items(name), branches(name), performer:users(full_name)');
+    dynamic q = _client
+        .from('stock_movements')
+        .select(
+          'id, movement_type, quantity, notes, created_at, performed_by, '
+          'items(name), branches(name), performer:users(full_name)',
+        );
     if (branchId != null) q = q.eq('branch_id', branchId);
     if (type != null) q = q.eq('movement_type', type);
     if (performedBy != null) q = q.eq('performed_by', performedBy);
     if (from != null) q = q.gte('created_at', from.toIso8601String());
     if (to != null) q = q.lt('created_at', to.toIso8601String());
-    final rows = await q.order('created_at', ascending: false).limit(limit) as List;
+    final rows =
+        await q.order('created_at', ascending: false).limit(limit) as List;
     return rows.map((r) {
       final item = r['items'];
       final br = r['branches'];
@@ -396,21 +419,27 @@ class InventoryRepository {
   }
 
   Future<List<PurchaseOrder>> fetchPurchases({String? branchId}) async {
-    dynamic q = _client.from('purchases').select(
-        'id, invoice_number, payment_status, total_amount, amount_paid, '
-        'purchase_date, suppliers(name), branches(name)');
+    dynamic q = _client
+        .from('purchases')
+        .select(
+          'id, invoice_number, payment_status, total_amount, amount_paid, '
+          'purchase_date, suppliers(name), branches(name)',
+        );
     if (branchId != null) q = q.eq('branch_id', branchId);
-    final rows = await q.order('purchase_date', ascending: false).limit(100) as List;
+    final rows =
+        await q.order('purchase_date', ascending: false).limit(100) as List;
 
     // Line counts for the listed orders in one extra query.
     final ids = rows.map((r) => r['id'] as String).toList();
     final counts = <String, int>{};
     if (ids.isNotEmpty) {
-      final lines = await _client
-          .from('purchase_items')
-          .select('purchase_id')
-          .inFilter('purchase_id', ids)
-          .limit(5000) as List;
+      final lines =
+          await _client
+                  .from('purchase_items')
+                  .select('purchase_id')
+                  .inFilter('purchase_id', ids)
+                  .limit(5000)
+              as List;
       for (final l in lines) {
         final pid = l['purchase_id'] as String;
         counts[pid] = (counts[pid] ?? 0) + 1;
@@ -436,33 +465,42 @@ class InventoryRepository {
   }
 
   Future<List<SupplierBalance>> fetchSupplierBalances() async {
-    final rows = await _client.from('v_supplier_balances').select().limit(200) as List;
+    final rows =
+        await _client.from('v_supplier_balances').select().limit(200) as List;
     return rows
-        .map((r) => SupplierBalance(
-              supplierId: (r['supplier_id'] as String?) ?? '',
-              supplierName: (r['supplier_name'] as String?) ?? 'Unknown supplier',
-              amountOwed: ((r['amount_owed'] as num?) ?? 0).toDouble(),
-            ))
+        .map(
+          (r) => SupplierBalance(
+            supplierId: (r['supplier_id'] as String?) ?? '',
+            supplierName: (r['supplier_name'] as String?) ?? 'Unknown supplier',
+            amountOwed: ((r['amount_owed'] as num?) ?? 0).toDouble(),
+          ),
+        )
         .toList();
   }
 
   Future<List<CatalogItem>> fetchCatalog({bool includeInactive = true}) async {
-    dynamic q = _client.from('items').select(
-        'id, name, category, unit, reorder_level, requires_prescription, is_active');
+    dynamic q = _client
+        .from('items')
+        .select(
+          'id, name, category, unit, reorder_level, requires_prescription, is_active',
+        );
     if (!includeInactive) q = q.eq('is_active', true);
     final rows = await q.order('name').limit(2000) as List;
     return rows
-        .map((r) => CatalogItem(
-              id: r['id'] as String,
-              name: (r['name'] as String?) ?? '—',
-              category: (r['category'] as String?)?.trim().isNotEmpty == true
-                  ? (r['category'] as String).trim()
-                  : 'Uncategorised',
-              unit: (r['unit'] as String?) ?? 'unit',
-              reorderLevel: ((r['reorder_level'] as num?) ?? 10).toDouble(),
-              requiresPrescription: (r['requires_prescription'] as bool?) ?? false,
-              isActive: (r['is_active'] as bool?) ?? true,
-            ))
+        .map(
+          (r) => CatalogItem(
+            id: r['id'] as String,
+            name: (r['name'] as String?) ?? '—',
+            category: (r['category'] as String?)?.trim().isNotEmpty == true
+                ? (r['category'] as String).trim()
+                : 'Uncategorised',
+            unit: (r['unit'] as String?) ?? 'unit',
+            reorderLevel: ((r['reorder_level'] as num?) ?? 10).toDouble(),
+            requiresPrescription:
+                (r['requires_prescription'] as bool?) ?? false,
+            isActive: (r['is_active'] as bool?) ?? true,
+          ),
+        )
         .toList();
   }
 
@@ -476,8 +514,10 @@ class InventoryRepository {
     required double deltaQty,
     required String reason,
   }) async {
-    if (deltaQty == 0) throw const InventoryException('Quantity can\'t be zero.');
-    if (reason.trim().isEmpty) throw const InventoryException('A reason is required.');
+    if (deltaQty == 0)
+      throw const InventoryException('Quantity can\'t be zero.');
+    if (reason.trim().isEmpty)
+      throw const InventoryException('A reason is required.');
 
     final current = await _client
         .from('inventory')
@@ -488,13 +528,17 @@ class InventoryRepository {
     final updated = onHand + deltaQty;
     if (updated < 0) {
       throw InventoryException(
-          'Not enough stock: ${onHand.toStringAsFixed(0)} on hand, tried to remove ${(-deltaQty).toStringAsFixed(0)}.');
+        'Not enough stock: ${onHand.toStringAsFixed(0)} on hand, tried to remove ${(-deltaQty).toStringAsFixed(0)}.',
+      );
     }
 
     final uid = _client.auth.currentUser?.id;
     final type = deltaQty < 0 ? 'adjustment_out' : 'adjustment_in';
 
-    await _client.from('inventory').update({'quantity_available': updated}).eq('id', inventoryId);
+    await _client
+        .from('inventory')
+        .update({'quantity_available': updated})
+        .eq('id', inventoryId);
     try {
       await _client.from('stock_movements').insert({
         'branch_id': branchId,
@@ -508,8 +552,13 @@ class InventoryRepository {
     } catch (_) {
       // Stock was already updated — the movement log write failing must not
       // leave the two out of sync, so roll the quantity back and report.
-      await _client.from('inventory').update({'quantity_available': onHand}).eq('id', inventoryId);
-      throw const InventoryException('Couldn\'t record the movement. No stock was changed.');
+      await _client
+          .from('inventory')
+          .update({'quantity_available': onHand})
+          .eq('id', inventoryId);
+      throw const InventoryException(
+        'Couldn\'t record the movement. No stock was changed.',
+      );
     }
   }
 
@@ -528,6 +577,58 @@ class InventoryRepository {
     await _client.from('inventory').update(patch).eq('id', inventoryId);
   }
 
+  Future<void> addStock({
+    required String branchId,
+    required String itemId,
+    required double quantity,
+    required double buyingPrice,
+    required double retailPrice,
+    double? wholesalePrice,
+    String? batchNumber,
+    DateTime? expiryDate,
+  }) async {
+    if (quantity <= 0)
+      throw const InventoryException('Quantity must be above zero.');
+    if (buyingPrice < 0 || retailPrice < 0 || (wholesalePrice ?? 0) < 0) {
+      throw const InventoryException('Prices cannot be negative.');
+    }
+    final today = DateTime.now();
+    final expiryDay = expiryDate == null
+        ? null
+        : DateTime(expiryDate.year, expiryDate.month, expiryDate.day);
+    final todayDay = DateTime(today.year, today.month, today.day);
+    if (expiryDay != null && expiryDay.isBefore(todayDay)) {
+      throw const InventoryException('Expiry date cannot be in the past.');
+    }
+
+    try {
+      await _client.rpc(
+        'receive_stock_delivery',
+        params: {
+          'p_branch_id': branchId,
+          'p_supplier_id': null,
+          'p_invoice_number': null,
+          'p_purchase_date': DateTime.now().toIso8601String().substring(0, 10),
+          'p_lines': [
+            {
+              'item_id': itemId,
+              'quantity': quantity,
+              'buying_price': buyingPrice,
+              'retail_price': retailPrice,
+              'wholesale_price': wholesalePrice,
+              'batch_number': batchNumber?.trim().isEmpty == true
+                  ? null
+                  : batchNumber?.trim(),
+              'expiry_date': expiryDate?.toIso8601String().substring(0, 10),
+            },
+          ],
+        },
+      );
+    } on PostgrestException catch (e) {
+      throw InventoryException(e.message);
+    }
+  }
+
   Future<void> createItem({
     required String name,
     required String category,
@@ -535,7 +636,8 @@ class InventoryRepository {
     required double reorderLevel,
     required bool requiresPrescription,
   }) async {
-    if (name.trim().isEmpty) throw const InventoryException('Item name is required.');
+    if (name.trim().isEmpty)
+      throw const InventoryException('Item name is required.');
     await _client.from('items').insert({
       'name': name.trim(),
       'category': category.trim().isEmpty ? null : category.trim(),
@@ -553,14 +655,18 @@ class InventoryRepository {
     required double reorderLevel,
     required bool requiresPrescription,
   }) async {
-    if (name.trim().isEmpty) throw const InventoryException('Item name is required.');
-    await _client.from('items').update({
-      'name': name.trim(),
-      'category': category.trim().isEmpty ? null : category.trim(),
-      'unit': unit.trim().isEmpty ? 'unit' : unit.trim(),
-      'reorder_level': reorderLevel,
-      'requires_prescription': requiresPrescription,
-    }).eq('id', id);
+    if (name.trim().isEmpty)
+      throw const InventoryException('Item name is required.');
+    await _client
+        .from('items')
+        .update({
+          'name': name.trim(),
+          'category': category.trim().isEmpty ? null : category.trim(),
+          'unit': unit.trim().isEmpty ? 'unit' : unit.trim(),
+          'reorder_level': reorderLevel,
+          'requires_prescription': requiresPrescription,
+        })
+        .eq('id', id);
   }
 
   Future<void> setItemActive(String id, bool active) async {

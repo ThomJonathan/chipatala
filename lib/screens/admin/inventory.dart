@@ -33,8 +33,21 @@ class InventoryScreen extends StatefulWidget {
   State<InventoryScreen> createState() => _InventoryScreenState();
 }
 
-const _kTabs = ['Overview', 'Low stock', 'Expiry', 'Movements', 'Purchases', 'Catalog'];
-const _kMovementTypes = ['purchase_in', 'sale_out', 'adjustment_in', 'adjustment_out', 'opening_stock'];
+const _kTabs = [
+  'Overview',
+  'Low stock',
+  'Expiry',
+  'Movements',
+  'Purchases',
+  'Catalog',
+];
+const _kMovementTypes = [
+  'purchase_in',
+  'sale_out',
+  'adjustment_in',
+  'adjustment_out',
+  'opening_stock',
+];
 
 String _fmtMk(double amount) {
   final neg = amount < 0;
@@ -47,13 +60,27 @@ String _fmtMk(double amount) {
   return '${neg ? '-' : ''}$buf';
 }
 
-String _fmtQty(double q) => q.toStringAsFixed(q.truncateToDouble() == q ? 0 : 2);
+String _fmtQty(double q) =>
+    q.toStringAsFixed(q.truncateToDouble() == q ? 0 : 2);
 
 String _fmtDate(String? raw) {
   if (raw == null || raw.isEmpty) return '—';
   try {
     final d = DateTime.parse(raw);
-    const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const m = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return '${d.day} ${m[d.month - 1]} ${d.year}';
   } catch (_) {
     return raw;
@@ -64,7 +91,20 @@ String _fmtDateTime(String raw) {
   if (raw.isEmpty) return '—';
   try {
     final d = DateTime.parse(raw).toLocal();
-    const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const m = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     final hh = d.hour.toString().padLeft(2, '0');
     final mm = d.minute.toString().padLeft(2, '0');
     return '${d.day} ${m[d.month - 1]}, $hh:$mm';
@@ -91,15 +131,40 @@ class _MovementMeta {
 _MovementMeta _movementMeta(String type) {
   switch (type) {
     case 'purchase_in':
-      return const _MovementMeta('Purchase', Icons.shopping_cart_outlined, kSuccess, false);
+      return const _MovementMeta(
+        'Purchase',
+        Icons.shopping_cart_outlined,
+        kSuccess,
+        false,
+      );
     case 'sale_out':
-      return const _MovementMeta('Sale', Icons.point_of_sale_outlined, kPrimary, true);
+      return const _MovementMeta(
+        'Sale',
+        Icons.point_of_sale_outlined,
+        kPrimary,
+        true,
+      );
     case 'adjustment_out':
-      return const _MovementMeta('Adjustment out', Icons.remove_circle_outline, kDanger, true);
+      return const _MovementMeta(
+        'Adjustment out',
+        Icons.remove_circle_outline,
+        kDanger,
+        true,
+      );
     case 'adjustment_in':
-      return const _MovementMeta('Adjustment in', Icons.add_circle_outline, kSuccess, false);
+      return const _MovementMeta(
+        'Adjustment in',
+        Icons.add_circle_outline,
+        kSuccess,
+        false,
+      );
     case 'opening_stock':
-      return const _MovementMeta('Opening', Icons.inventory_2_outlined, kInkMuted, false);
+      return const _MovementMeta(
+        'Opening',
+        Icons.inventory_2_outlined,
+        kInkMuted,
+        false,
+      );
     default:
       return _MovementMeta(type, Icons.swap_horiz_outlined, kInkMuted, false);
   }
@@ -241,8 +306,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
       if (_category != null && it.category != _category) return false;
       if (q.isEmpty) return true;
       if (it.itemName.toLowerCase().contains(q)) return true;
-      return it.batches.any((b) =>
-          b.batchNumber.toLowerCase().contains(q) || b.branchName.toLowerCase().contains(q));
+      return it.batches.any(
+        (b) =>
+            b.batchNumber.toLowerCase().contains(q) ||
+            b.branchName.toLowerCase().contains(q),
+      );
     }).toList();
   }
 
@@ -338,10 +406,26 @@ class _InventoryScreenState extends State<InventoryScreen> {
     }
   }
 
+  Future<void> _addStock() async {
+    final done = await showAdaptiveSheet<bool>(
+      context,
+      builder: (_) => _AddStockSheet(
+        repo: _repo,
+        branches: _branches,
+        items: _catalog.where((item) => item.isActive).toList(),
+      ),
+    );
+    if (done == true && mounted) {
+      await _load();
+      if (mounted) showToast(context, 'Stock added and available for sale.');
+    }
+  }
+
   Future<void> _addOrEditItem([CatalogItem? item]) async {
     final msg = await showAdaptiveSheet<String>(
       context,
-      builder: (_) => _ItemFormSheet(repo: _repo, item: item, categories: _categories),
+      builder: (_) =>
+          _ItemFormSheet(repo: _repo, item: item, categories: _categories),
     );
     if (msg == null) return;
     await _load();
@@ -361,7 +445,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
     try {
       await _repo.setItemActive(item.id, !item.isActive);
       await _load();
-      if (mounted) showToast(context, item.isActive ? '${item.name} discontinued.' : '${item.name} is active again.');
+      if (mounted)
+        showToast(
+          context,
+          item.isActive
+              ? '${item.name} discontinued.'
+              : '${item.name} is active again.',
+        );
     } on InventoryException catch (e) {
       if (mounted) showToast(context, e.message, error: true);
     }
@@ -389,42 +479,59 @@ class _InventoryScreenState extends State<InventoryScreen> {
       switch (_tab) {
         case 0:
           tab = 'stock_overview';
-          final buf = StringBuffer('Item,Category,Unit,Branches,Qty on hand,Reorder level,Status,Stock value (MK)\n');
+          final buf = StringBuffer(
+            'Item,Category,Unit,Branches,Qty on hand,Reorder level,Status,Stock value (MK)\n',
+          );
           for (final it in _visibleItems) {
-            final where = it.byBranch.map((e) => '${e.key} (${_fmtQty(e.value)})').join('; ');
-            buf.writeln([
-              _csvCell(it.itemName),
-              _csvCell(it.category),
-              _csvCell(it.unit),
-              _csvCell(where),
-              _fmtQty(it.qtyOnHand),
-              _fmtQty(it.reorderLevel),
-              it.status.name,
-              it.stockValue.round(),
-            ].join(','));
+            final where = it.byBranch
+                .map((e) => '${e.key} (${_fmtQty(e.value)})')
+                .join('; ');
+            buf.writeln(
+              [
+                _csvCell(it.itemName),
+                _csvCell(it.category),
+                _csvCell(it.unit),
+                _csvCell(where),
+                _fmtQty(it.qtyOnHand),
+                _fmtQty(it.reorderLevel),
+                it.status.name,
+                it.stockValue.round(),
+              ].join(','),
+            );
           }
           csv = buf.toString();
         case 1:
           tab = 'low_stock';
           final buf = StringBuffer('Item,Branch,Qty on hand,Reorder level\n');
           for (final r in _low) {
-            buf.writeln([_csvCell(r.itemName), _csvCell(r.branchName), _fmtQty(r.qtyOnHand), _fmtQty(r.reorderLevel)].join(','));
+            buf.writeln(
+              [
+                _csvCell(r.itemName),
+                _csvCell(r.branchName),
+                _fmtQty(r.qtyOnHand),
+                _fmtQty(r.reorderLevel),
+              ].join(','),
+            );
           }
           csv = buf.toString();
         case 2:
           tab = 'expiry';
-          final buf = StringBuffer('Item,Batch,Branch,Expiry date,Days to expiry,Qty,Value at risk (MK)\n');
+          final buf = StringBuffer(
+            'Item,Batch,Branch,Expiry date,Days to expiry,Qty,Value at risk (MK)\n',
+          );
           for (final bucket in _expiryBuckets()) {
             for (final b in bucket) {
-              buf.writeln([
-                _csvCell(b.itemName),
-                _csvCell(b.batchNumber),
-                _csvCell(b.branchName),
-                b.expiryDate ?? '',
-                b.daysToExpiry ?? '',
-                _fmtQty(b.qtyAvailable),
-                (b.qtyAvailable * b.buyingPrice).round(),
-              ].join(','));
+              buf.writeln(
+                [
+                  _csvCell(b.itemName),
+                  _csvCell(b.batchNumber),
+                  _csvCell(b.branchName),
+                  b.expiryDate ?? '',
+                  b.daysToExpiry ?? '',
+                  _fmtQty(b.qtyAvailable),
+                  (b.qtyAvailable * b.buyingPrice).round(),
+                ].join(','),
+              );
             }
           }
           csv = buf.toString();
@@ -432,44 +539,54 @@ class _InventoryScreenState extends State<InventoryScreen> {
           tab = 'stock_movements';
           final buf = StringBuffer('Date,Type,Item,Branch,Quantity,Notes\n');
           for (final m in _visibleMovements) {
-            buf.writeln([
-              _csvCell(m.createdAt),
-              m.type,
-              _csvCell(m.itemName),
-              _csvCell(m.branchName),
-              _fmtQty(m.quantity),
-              _csvCell(m.notes ?? ''),
-            ].join(','));
+            buf.writeln(
+              [
+                _csvCell(m.createdAt),
+                m.type,
+                _csvCell(m.itemName),
+                _csvCell(m.branchName),
+                _fmtQty(m.quantity),
+                _csvCell(m.notes ?? ''),
+              ].join(','),
+            );
           }
           csv = buf.toString();
         case 4:
           tab = 'purchases';
-          final buf = StringBuffer('Date,Invoice,Branch,Supplier,Total (MK),Paid (MK),Balance (MK),Status\n');
+          final buf = StringBuffer(
+            'Date,Invoice,Branch,Supplier,Total (MK),Paid (MK),Balance (MK),Status\n',
+          );
           for (final p in _visiblePurchases) {
-            buf.writeln([
-              p.purchaseDate,
-              _csvCell(p.invoiceNumber),
-              _csvCell(p.branchName),
-              _csvCell(p.supplierName),
-              p.totalAmount.round(),
-              p.amountPaid.round(),
-              p.balance.round(),
-              p.paymentStatus,
-            ].join(','));
+            buf.writeln(
+              [
+                p.purchaseDate,
+                _csvCell(p.invoiceNumber),
+                _csvCell(p.branchName),
+                _csvCell(p.supplierName),
+                p.totalAmount.round(),
+                p.amountPaid.round(),
+                p.balance.round(),
+                p.paymentStatus,
+              ].join(','),
+            );
           }
           csv = buf.toString();
         default:
           tab = 'item_catalog';
-          final buf = StringBuffer('Name,Category,Unit,Reorder level,Rx,Active\n');
+          final buf = StringBuffer(
+            'Name,Category,Unit,Reorder level,Rx,Active\n',
+          );
           for (final c in _visibleCatalog) {
-            buf.writeln([
-              _csvCell(c.name),
-              _csvCell(c.category),
-              _csvCell(c.unit),
-              _fmtQty(c.reorderLevel),
-              c.requiresPrescription ? 'yes' : 'no',
-              c.isActive ? 'yes' : 'no',
-            ].join(','));
+            buf.writeln(
+              [
+                _csvCell(c.name),
+                _csvCell(c.category),
+                _csvCell(c.unit),
+                _fmtQty(c.reorderLevel),
+                c.requiresPrescription ? 'yes' : 'no',
+                c.isActive ? 'yes' : 'no',
+              ].join(','),
+            );
           }
           csv = buf.toString();
       }
@@ -503,7 +620,12 @@ class _InventoryScreenState extends State<InventoryScreen> {
               final wide = c.maxWidth >= kWideContentBreakpoint;
               return SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(wide ? 32 : 18, wide ? 28 : 12, wide ? 32 : 18, 96),
+                padding: EdgeInsets.fromLTRB(
+                  wide ? 32 : 18,
+                  wide ? 28 : 12,
+                  wide ? 32 : 18,
+                  96,
+                ),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1080),
@@ -519,23 +641,31 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                 ? 'Loading…'
                                 : '${_visibleItems.length} items · $_scopeName',
                             trailing: _exporting
-                              ? const SizedBox(
-                                  width: 44,
-                                  height: 44,
-                                  child: Center(
-                                    child: SizedBox(
-                                      width: 20,
-                                      height: 20,
-                                      child: CircularProgressIndicator(strokeWidth: 2, color: kPrimary),
+                                ? const SizedBox(
+                                    width: 44,
+                                    height: 44,
+                                    child: Center(
+                                      child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: kPrimary,
+                                        ),
+                                      ),
                                     ),
+                                  )
+                                : OutlinedButton.icon(
+                                    onPressed: _loading
+                                        ? null
+                                        : _exportCurrentTab,
+                                    style: outlineButtonStyle(height: 44),
+                                    icon: const Icon(
+                                      Icons.download_outlined,
+                                      size: 18,
+                                    ),
+                                    label: const Text('Export'),
                                   ),
-                                )
-                              : OutlinedButton.icon(
-                                  onPressed: _loading ? null : _exportCurrentTab,
-                                  style: outlineButtonStyle(height: 44),
-                                  icon: const Icon(Icons.download_outlined, size: 18),
-                                  label: const Text('Export'),
-                                ),
                           ),
                         const SizedBox(height: 18),
                         if (_showNeedsAttention)
@@ -572,7 +702,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
         Expanded(
           child: PageTitle(
             title: 'Needs attention',
-            subtitle: '${_low.length + _expiryBuckets().fold(0, (s, b) => s + b.length)} items requiring action',
+            subtitle:
+                '${_low.length + _expiryBuckets().fold(0, (s, b) => s + b.length)} items requiring action',
           ),
         ),
       ],
@@ -591,23 +722,41 @@ class _InventoryScreenState extends State<InventoryScreen> {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              FilterPill(label: 'All (${_low.length + expiryCount})', selected: _attentionFilter == 0, onTap: () => setState(() => _attentionFilter = 0)),
+              FilterPill(
+                label: 'All (${_low.length + expiryCount})',
+                selected: _attentionFilter == 0,
+                onTap: () => setState(() => _attentionFilter = 0),
+              ),
               const SizedBox(width: 8),
-              FilterPill(label: 'Low stock (${_low.length})', selected: _attentionFilter == 1, onTap: () => setState(() => _attentionFilter = 1)),
+              FilterPill(
+                label: 'Low stock (${_low.length})',
+                selected: _attentionFilter == 1,
+                onTap: () => setState(() => _attentionFilter = 1),
+              ),
               const SizedBox(width: 8),
-              FilterPill(label: 'Expiring (${expiryCount})', selected: _attentionFilter == 2, onTap: () => setState(() => _attentionFilter = 2)),
+              FilterPill(
+                label: 'Expiring (${expiryCount})',
+                selected: _attentionFilter == 2,
+                onTap: () => setState(() => _attentionFilter = 2),
+              ),
             ],
           ),
         ),
         const SizedBox(height: 16),
         if (showLow) ...[
-          Text('Low stock', style: sans(16, weight: FontWeight.w700, color: kInk)),
+          Text(
+            'Low stock',
+            style: sans(16, weight: FontWeight.w700, color: kInk),
+          ),
           const SizedBox(height: 10),
           _LowStockTab(rows: _low, wide: wide),
           const SizedBox(height: 20),
         ],
         if (showExpiry) ...[
-          Text('Expiring and expired', style: sans(16, weight: FontWeight.w700, color: kInk)),
+          Text(
+            'Expiring and expired',
+            style: sans(16, weight: FontWeight.w700, color: kInk),
+          ),
           const SizedBox(height: 10),
           _ExpiryTab(buckets: buckets, wide: wide, onAdjust: _adjust),
         ],
@@ -632,13 +781,26 @@ class _InventoryScreenState extends State<InventoryScreen> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String?>(
           value: _branchId,
-          icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: kInkMuted),
+          icon: const Icon(
+            Icons.keyboard_arrow_down,
+            size: 18,
+            color: kInkMuted,
+          ),
           style: sans(13.5, weight: FontWeight.w500, color: kInk),
-          hint: Text('All Branches', style: sans(13.5, weight: FontWeight.w500, color: kInk)),
+          hint: Text(
+            'All Branches',
+            style: sans(13.5, weight: FontWeight.w500, color: kInk),
+          ),
           onChanged: _onBranchChanged,
           items: [
-            const DropdownMenuItem<String?>(value: null, child: Text('All Branches')),
-            ..._branches.map((b) => DropdownMenuItem<String?>(value: b.id, child: Text(b.name))),
+            const DropdownMenuItem<String?>(
+              value: null,
+              child: Text('All Branches'),
+            ),
+            ..._branches.map(
+              (b) =>
+                  DropdownMenuItem<String?>(value: b.id, child: Text(b.name)),
+            ),
           ],
         ),
       ),
@@ -653,13 +815,25 @@ class _InventoryScreenState extends State<InventoryScreen> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String?>(
           value: _category,
-          icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: kInkMuted),
+          icon: const Icon(
+            Icons.keyboard_arrow_down,
+            size: 18,
+            color: kInkMuted,
+          ),
           style: sans(13.5, weight: FontWeight.w500, color: kInk),
-          hint: Text('All Categories', style: sans(13.5, weight: FontWeight.w500, color: kInk)),
+          hint: Text(
+            'All Categories',
+            style: sans(13.5, weight: FontWeight.w500, color: kInk),
+          ),
           onChanged: (v) => setState(() => _category = v),
           items: [
-            const DropdownMenuItem<String?>(value: null, child: Text('All Categories')),
-            ..._categories.map((c) => DropdownMenuItem<String?>(value: c, child: Text(c))),
+            const DropdownMenuItem<String?>(
+              value: null,
+              child: Text('All Categories'),
+            ),
+            ..._categories.map(
+              (c) => DropdownMenuItem<String?>(value: c, child: Text(c)),
+            ),
           ],
         ),
       ),
@@ -683,7 +857,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
       );
     }
     // Mobile: search + Filters button; branch/category live in a sheet.
-    final activeFilters = (_branchId != null ? 1 : 0) + (_category != null ? 1 : 0);
+    final activeFilters =
+        (_branchId != null ? 1 : 0) + (_category != null ? 1 : 0);
     return Row(
       children: [
         Expanded(
@@ -736,6 +911,16 @@ class _InventoryScreenState extends State<InventoryScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            onPressed: _loading ? null : _addStock,
+            style: primaryButtonStyle(height: 42),
+            icon: const Icon(Icons.add_box_outlined, size: 18),
+            label: const Text('Add stock'),
+          ),
+        ),
+        const SizedBox(height: 14),
         _summaryCards(wide),
         const SizedBox(height: 16),
         _tabChips(),
@@ -819,7 +1004,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
       child: Row(
         children: [
           for (int i = 0; i < _kTabs.length; i++) ...[
-            FilterPill(label: labels[i], selected: _tab == i, onTap: () => setState(() => _tab = i)),
+            FilterPill(
+              label: labels[i],
+              selected: _tab == i,
+              onTap: () => setState(() => _tab = i),
+            ),
             if (i != _kTabs.length - 1) const SizedBox(width: 8),
           ],
         ],
@@ -867,7 +1056,11 @@ class _InventoryScreenState extends State<InventoryScreen> {
                 },
         );
       case 4:
-        return _PurchasesTab(purchases: _visiblePurchases, balances: _balances, wide: wide);
+        return _PurchasesTab(
+          purchases: _visiblePurchases,
+          balances: _balances,
+          wide: wide,
+        );
       default:
         return _CatalogTab(
           items: _visibleCatalog,
@@ -924,17 +1117,27 @@ class _SummaryCard extends StatelessWidget {
               Container(
                 width: 30,
                 height: 30,
-                decoration: BoxDecoration(color: iconBg, borderRadius: BorderRadius.circular(8)),
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 child: Icon(icon, size: 16, color: iconColor),
               ),
               const Spacer(),
-              if (onTap != null) const Icon(Icons.chevron_right, size: 16, color: kInkMuted),
+              if (onTap != null)
+                const Icon(Icons.chevron_right, size: 16, color: kInkMuted),
             ],
           ),
           const SizedBox(height: 10),
-          Text(value, style: mono(17, weight: FontWeight.w700, color: kInk)),
+          Text(
+            value,
+            style: mono(17, weight: FontWeight.w700, color: kInk),
+          ),
           const SizedBox(height: 2),
-          Text(label, style: sans(11.5, weight: FontWeight.w600, color: kInkMuted)),
+          Text(
+            label,
+            style: sans(11.5, weight: FontWeight.w600, color: kInkMuted),
+          ),
           Text(sub, style: sans(10.5, color: kInkMuted)),
         ],
       ),
@@ -942,7 +1145,11 @@ class _SummaryCard extends StatelessWidget {
     if (onTap == null) return card;
     return Material(
       color: Colors.transparent,
-      child: InkWell(borderRadius: BorderRadius.circular(12), onTap: onTap, child: card),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: card,
+      ),
     );
   }
 }
@@ -993,7 +1200,11 @@ class _OverviewTab extends StatelessWidget {
   }
 
   Widget _overviewHeader() {
-    const style = TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: kInkMuted);
+    const style = TextStyle(
+      fontSize: 11.5,
+      fontWeight: FontWeight.w600,
+      color: kInkMuted,
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
@@ -1002,7 +1213,10 @@ class _OverviewTab extends StatelessWidget {
           Expanded(flex: 1, child: Text('ON HAND', style: style)),
           Expanded(flex: 1, child: Text('REORDER', style: style)),
           Expanded(flex: 1, child: Text('STATUS', style: style)),
-          Expanded(flex: 1, child: Text('VALUE', style: style, textAlign: TextAlign.right)),
+          Expanded(
+            flex: 1,
+            child: Text('VALUE', style: style, textAlign: TextAlign.right),
+          ),
           SizedBox(width: 40),
         ],
       ),
@@ -1026,8 +1240,13 @@ class _OverviewRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final where = item.byBranch.take(2).map((e) => '${e.key} (${_fmtQty(e.value)})').join(' · ');
-    final extra = item.byBranch.length > 2 ? ' +${item.byBranch.length - 2} more' : '';
+    final where = item.byBranch
+        .take(2)
+        .map((e) => '${e.key} (${_fmtQty(e.value)})')
+        .join(' · ');
+    final extra = item.byBranch.length > 2
+        ? ' +${item.byBranch.length - 2} more'
+        : '';
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -1047,19 +1266,43 @@ class _OverviewRow extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(item.itemName, style: sans(13.5, weight: FontWeight.w600, color: kInk)),
-                        Text('${item.category} · ${item.unit}${showBranch ? ' · $where$extra' : ''}',
-                            style: sans(11.5, color: kInkMuted)),
+                        Text(
+                          item.itemName,
+                          style: sans(
+                            13.5,
+                            weight: FontWeight.w600,
+                            color: kInk,
+                          ),
+                        ),
+                        Text(
+                          '${item.category} · ${item.unit}${showBranch ? ' · $where$extra' : ''}',
+                          style: sans(11.5, color: kInkMuted),
+                        ),
                       ],
                     ),
                   ),
-                  Expanded(flex: 1, child: Text(_fmtQty(item.qtyOnHand), style: mono(13.5, weight: FontWeight.w600, color: kInk))),
-                  Expanded(flex: 1, child: Text(_fmtQty(item.reorderLevel), style: sans(13, color: kInkMuted))),
+                  Expanded(
+                    flex: 1,
+                    child: Text(
+                      _fmtQty(item.qtyOnHand),
+                      style: mono(13.5, weight: FontWeight.w600, color: kInk),
+                    ),
+                  ),
+                  Expanded(
+                    flex: 1,
+                    child: Text(
+                      _fmtQty(item.reorderLevel),
+                      style: sans(13, color: kInkMuted),
+                    ),
+                  ),
                   Expanded(flex: 1, child: _StatusChip(status: item.status)),
                   Expanded(
                     flex: 1,
-                    child: Text('MK ${_fmtMk(item.stockValue)}',
-                        style: mono(12.5, weight: FontWeight.w600, color: kInk), textAlign: TextAlign.right),
+                    child: Text(
+                      'MK ${_fmtMk(item.stockValue)}',
+                      style: mono(12.5, weight: FontWeight.w600, color: kInk),
+                      textAlign: TextAlign.right,
+                    ),
                   ),
                 ],
               )
@@ -1069,10 +1312,19 @@ class _OverviewRow extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(item.itemName, style: sans(13.5, weight: FontWeight.w600, color: kInk)),
+                        Text(
+                          item.itemName,
+                          style: sans(
+                            13.5,
+                            weight: FontWeight.w600,
+                            color: kInk,
+                          ),
+                        ),
                         const SizedBox(height: 2),
-                        Text('${_fmtQty(item.qtyOnHand)} ${item.unit} · $where$extra',
-                            style: sans(11.5, color: kInkMuted)),
+                        Text(
+                          '${_fmtQty(item.qtyOnHand)} ${item.unit} · $where$extra',
+                          style: sans(11.5, color: kInkMuted),
+                        ),
                       ],
                     ),
                   ),
@@ -1082,7 +1334,9 @@ class _OverviewRow extends StatelessWidget {
               ),
         children: [
           Container(
-            decoration: const BoxDecoration(border: Border(top: BorderSide(color: kBorder))),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: kBorder)),
+            ),
             child: Column(
               children: [
                 for (int i = 0; i < item.batches.length; i++)
@@ -1138,11 +1392,13 @@ class _BatchRow extends StatelessWidget {
     final expiryLabel = batch.expiryDate == null
         ? 'No expiry'
         : d == null
-            ? _fmtDate(batch.expiryDate)
-            : d < 0
-                ? 'Expired ${_fmtDate(batch.expiryDate)}'
-                : 'Exp $d d · ${_fmtDate(batch.expiryDate)}';
-    final expiryColor = batch.isExpired ? kDanger : (d != null && d <= 30 ? kWarn : kInkMuted);
+        ? _fmtDate(batch.expiryDate)
+        : d < 0
+        ? 'Expired ${_fmtDate(batch.expiryDate)}'
+        : 'Exp $d d · ${_fmtDate(batch.expiryDate)}';
+    final expiryColor = batch.isExpired
+        ? kDanger
+        : (d != null && d <= 30 ? kWarn : kInkMuted);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
@@ -1156,15 +1412,24 @@ class _BatchRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Batch ${batch.batchNumber} · ${batch.branchName}',
-                    style: sans(12.5, weight: FontWeight.w600, color: kInk)),
+                Text(
+                  'Batch ${batch.batchNumber} · ${batch.branchName}',
+                  style: sans(12.5, weight: FontWeight.w600, color: kInk),
+                ),
                 const SizedBox(height: 2),
                 Text(
                   '${_fmtQty(batch.qtyAvailable)} $unit · Buy MK ${_fmtMk(batch.buyingPrice)} · Sell MK ${_fmtMk(batch.retailPrice)}',
                   style: sans(11.5, color: kInkMuted),
                 ),
                 const SizedBox(height: 2),
-                Text(expiryLabel, style: sans(11.5, weight: FontWeight.w600, color: expiryColor)),
+                Text(
+                  expiryLabel,
+                  style: sans(
+                    11.5,
+                    weight: FontWeight.w600,
+                    color: expiryColor,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1226,7 +1491,14 @@ class _LowStockTab extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(r.itemName, style: sans(13.5, weight: FontWeight.w600, color: kInk)),
+                          Text(
+                            r.itemName,
+                            style: sans(
+                              13.5,
+                              weight: FontWeight.w600,
+                              color: kInk,
+                            ),
+                          ),
                           const SizedBox(height: 2),
                           Text(r.branchName, style: sans(12, color: kInkMuted)),
                         ],
@@ -1235,9 +1507,18 @@ class _LowStockTab extends StatelessWidget {
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text('${_fmtQty(r.qtyOnHand)} / ${_fmtQty(r.reorderLevel)}',
-                            style: mono(13, weight: FontWeight.w700, color: kWarn)),
-                        Text('on hand / reorder', style: sans(10.5, color: kInkMuted)),
+                        Text(
+                          '${_fmtQty(r.qtyOnHand)} / ${_fmtQty(r.reorderLevel)}',
+                          style: mono(
+                            13,
+                            weight: FontWeight.w700,
+                            color: kWarn,
+                          ),
+                        ),
+                        Text(
+                          'on hand / reorder',
+                          style: sans(10.5, color: kInkMuted),
+                        ),
                       ],
                     ),
                   ],
@@ -1270,11 +1551,20 @@ class _ExpiryTab extends StatelessWidget {
   final List<List<StockBatch>> buckets;
   final bool wide;
   final ValueChanged<StockBatch> onAdjust;
-  const _ExpiryTab({required this.buckets, required this.wide, required this.onAdjust});
+  const _ExpiryTab({
+    required this.buckets,
+    required this.wide,
+    required this.onAdjust,
+  });
 
   @override
   Widget build(BuildContext context) {
-    const titles = ['Already expired', 'Under 30 days', '30 to 60 days', '60 to 90 days'];
+    const titles = [
+      'Already expired',
+      'Under 30 days',
+      '30 to 60 days',
+      '60 to 90 days',
+    ];
     const subs = [
       'Write off or remove from sale.',
       'Discount or push first.',
@@ -1300,8 +1590,14 @@ class _ExpiryTab extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('${titles[i]} (${buckets[i].length})',
-                          style: sans(13, weight: FontWeight.w700, color: i == 0 ? kDanger : kInk)),
+                      Text(
+                        '${titles[i]} (${buckets[i].length})',
+                        style: sans(
+                          13,
+                          weight: FontWeight.w700,
+                          color: i == 0 ? kDanger : kInk,
+                        ),
+                      ),
                       Text(subs[i], style: sans(11.5, color: kInkMuted)),
                     ],
                   ),
@@ -1311,7 +1607,10 @@ class _ExpiryTab extends StatelessWidget {
             const SizedBox(height: 8),
             for (final b in buckets[i]) ...[
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   border: Border.all(color: kBorder),
@@ -1324,7 +1623,14 @@ class _ExpiryTab extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(b.itemName, style: sans(13.5, weight: FontWeight.w600, color: kInk)),
+                          Text(
+                            b.itemName,
+                            style: sans(
+                              13.5,
+                              weight: FontWeight.w600,
+                              color: kInk,
+                            ),
+                          ),
                           const SizedBox(height: 2),
                           Text(
                             'Batch ${b.batchNumber} · ${b.branchName} · ${_fmtDate(b.expiryDate)} '
@@ -1332,8 +1638,14 @@ class _ExpiryTab extends StatelessWidget {
                             style: sans(11.5, color: kInkMuted),
                           ),
                           const SizedBox(height: 2),
-                          Text('${_fmtQty(b.qtyAvailable)} on hand · MK ${_fmtMk(b.qtyAvailable * b.buyingPrice)} at risk',
-                              style: sans(11.5, weight: FontWeight.w600, color: i == 0 ? kDanger : kWarn)),
+                          Text(
+                            '${_fmtQty(b.qtyAvailable)} on hand · MK ${_fmtMk(b.qtyAvailable * b.buyingPrice)} at risk',
+                            style: sans(
+                              11.5,
+                              weight: FontWeight.w600,
+                              color: i == 0 ? kDanger : kWarn,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1344,7 +1656,14 @@ class _ExpiryTab extends StatelessWidget {
                         minimumSize: Size.zero,
                         tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
-                      child: Text('Write off', style: sans(12.5, weight: FontWeight.w600, color: kPrimary)),
+                      child: Text(
+                        'Write off',
+                        style: sans(
+                          12.5,
+                          weight: FontWeight.w600,
+                          color: kPrimary,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1386,13 +1705,23 @@ class _MovementsTab extends StatelessWidget {
         if (activityLabel != null) ...[
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-            decoration: BoxDecoration(color: kPrimaryTint, borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(
+              color: kPrimaryTint,
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: Row(
               children: [
-                const Icon(Icons.person_search_outlined, size: 17, color: kPrimary),
+                const Icon(
+                  Icons.person_search_outlined,
+                  size: 17,
+                  color: kPrimary,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(activityLabel!, style: sans(12.5, weight: FontWeight.w600, color: kPrimary)),
+                  child: Text(
+                    activityLabel!,
+                    style: sans(12.5, weight: FontWeight.w600, color: kPrimary),
+                  ),
                 ),
                 InkWell(
                   onTap: onClearActivity,
@@ -1411,7 +1740,11 @@ class _MovementsTab extends StatelessWidget {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              FilterPill(label: 'All types', selected: selectedType == null, onTap: () => onTypeChanged(null)),
+              FilterPill(
+                label: 'All types',
+                selected: selectedType == null,
+                onTap: () => onTypeChanged(null),
+              ),
               const SizedBox(width: 8),
               for (final t in _kMovementTypes) ...[
                 FilterPill(
@@ -1443,7 +1776,10 @@ class _MovementsTab extends StatelessWidget {
                 final m = movements[i];
                 final meta = _movementMeta(m.type);
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     border: i == movements.length - 1
                         ? null
@@ -1466,21 +1802,42 @@ class _MovementsTab extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(m.itemName, style: sans(13, weight: FontWeight.w600, color: kInk)),
+                            Text(
+                              m.itemName,
+                              style: sans(
+                                13,
+                                weight: FontWeight.w600,
+                                color: kInk,
+                              ),
+                            ),
                             const SizedBox(height: 2),
-                            Text('${m.branchName} · ${meta.label} · ${_fmtDateTime(m.createdAt)}${m.performedByName != null && m.performedByName!.trim().isNotEmpty ? ' · by ${m.performedByName!.trim()}' : ''}',
-                                style: sans(11.5, color: kInkMuted)),
+                            Text(
+                              '${m.branchName} · ${meta.label} · ${_fmtDateTime(m.createdAt)}${m.performedByName != null && m.performedByName!.trim().isNotEmpty ? ' · by ${m.performedByName!.trim()}' : ''}',
+                              style: sans(11.5, color: kInkMuted),
+                            ),
                             if ((m.notes ?? '').trim().isNotEmpty) ...[
                               const SizedBox(height: 2),
-                              Text('“${m.notes!.trim()}”',
-                                  style: sans(11.5, color: kInkMuted, height: 1.35)),
+                              Text(
+                                '“${m.notes!.trim()}”',
+                                style: sans(
+                                  11.5,
+                                  color: kInkMuted,
+                                  height: 1.35,
+                                ),
+                              ),
                             ],
                           ],
                         ),
                       ),
                       const SizedBox(width: 10),
-                      Text('${meta.isOut ? '−' : '+'}${_fmtQty(m.quantity)}',
-                          style: mono(13, weight: FontWeight.w700, color: meta.color)),
+                      Text(
+                        '${meta.isOut ? '−' : '+'}${_fmtQty(m.quantity)}',
+                        style: mono(
+                          13,
+                          weight: FontWeight.w700,
+                          color: meta.color,
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -1500,7 +1857,11 @@ class _PurchasesTab extends StatelessWidget {
   final List<PurchaseOrder> purchases;
   final List<SupplierBalance> balances;
   final bool wide;
-  const _PurchasesTab({required this.purchases, required this.balances, required this.wide});
+  const _PurchasesTab({
+    required this.purchases,
+    required this.balances,
+    required this.wide,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1518,9 +1879,19 @@ class _PurchasesTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Owed to suppliers', style: sans(12.5, weight: FontWeight.w600, color: kInkMuted)),
+              Text(
+                'Owed to suppliers',
+                style: sans(12.5, weight: FontWeight.w600, color: kInkMuted),
+              ),
               const SizedBox(height: 4),
-              Text('MK ${_fmtMk(totalOwed)}', style: mono(21, weight: FontWeight.w700, color: totalOwed > 0 ? kDanger : kInk)),
+              Text(
+                'MK ${_fmtMk(totalOwed)}',
+                style: mono(
+                  21,
+                  weight: FontWeight.w700,
+                  color: totalOwed > 0 ? kDanger : kInk,
+                ),
+              ),
               if (balances.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 for (final b in balances)
@@ -1528,20 +1899,38 @@ class _PurchasesTab extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 6),
                     child: Row(
                       children: [
-                        Expanded(child: Text(b.supplierName, style: sans(13, color: kInk))),
-                        Text('MK ${_fmtMk(b.amountOwed)}', style: mono(13, weight: FontWeight.w600, color: kDanger)),
+                        Expanded(
+                          child: Text(
+                            b.supplierName,
+                            style: sans(13, color: kInk),
+                          ),
+                        ),
+                        Text(
+                          'MK ${_fmtMk(b.amountOwed)}',
+                          style: mono(
+                            13,
+                            weight: FontWeight.w600,
+                            color: kDanger,
+                          ),
+                        ),
                       ],
                     ),
                   ),
               ] else ...[
                 const SizedBox(height: 4),
-                Text('Nothing owed right now.', style: sans(12.5, color: kInkMuted)),
+                Text(
+                  'Nothing owed right now.',
+                  style: sans(12.5, color: kInkMuted),
+                ),
               ],
             ],
           ),
         ),
         const SizedBox(height: 16),
-        Text('Stock orders (${purchases.length})', style: sans(13, weight: FontWeight.w600, color: kInkMuted)),
+        Text(
+          'Stock orders (${purchases.length})',
+          style: sans(13, weight: FontWeight.w600, color: kInkMuted),
+        ),
         const SizedBox(height: 8),
         if (purchases.isEmpty)
           const EmptyState(
@@ -1565,25 +1954,46 @@ class _PurchasesTab extends StatelessWidget {
                     children: [
                       Expanded(
                         child: Text(
-                          p.invoiceNumber == '—' ? p.supplierName : '${p.supplierName} · ${p.invoiceNumber}',
-                          style: sans(13.5, weight: FontWeight.w600, color: kInk),
+                          p.invoiceNumber == '—'
+                              ? p.supplierName
+                              : '${p.supplierName} · ${p.invoiceNumber}',
+                          style: sans(
+                            13.5,
+                            weight: FontWeight.w600,
+                            color: kInk,
+                          ),
                         ),
                       ),
                       _PaymentPill(status: p.paymentStatus),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text('${p.branchName} · ${_fmtDate(p.purchaseDate)} · ${p.lineCount} ${p.lineCount == 1 ? 'line' : 'lines'}',
-                      style: sans(12, color: kInkMuted)),
+                  Text(
+                    '${p.branchName} · ${_fmtDate(p.purchaseDate)} · ${p.lineCount} ${p.lineCount == 1 ? 'line' : 'lines'}',
+                    style: sans(12, color: kInkMuted),
+                  ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Text('MK ${_fmtMk(p.totalAmount)}', style: mono(14, weight: FontWeight.w700, color: kInk)),
+                      Text(
+                        'MK ${_fmtMk(p.totalAmount)}',
+                        style: mono(14, weight: FontWeight.w700, color: kInk),
+                      ),
                       const SizedBox(width: 10),
-                      Text('paid MK ${_fmtMk(p.amountPaid)}', style: sans(12, color: kInkMuted)),
+                      Text(
+                        'paid MK ${_fmtMk(p.amountPaid)}',
+                        style: sans(12, color: kInkMuted),
+                      ),
                       const Spacer(),
                       if (p.balance > 0)
-                        Text('owes MK ${_fmtMk(p.balance)}', style: sans(12, weight: FontWeight.w700, color: kDanger)),
+                        Text(
+                          'owes MK ${_fmtMk(p.balance)}',
+                          style: sans(
+                            12,
+                            weight: FontWeight.w700,
+                            color: kDanger,
+                          ),
+                        ),
                     ],
                   ),
                 ],
@@ -1642,8 +2052,10 @@ class _CatalogTab extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: Text('Products (${items.length})',
-                  style: sans(13, weight: FontWeight.w600, color: kInkMuted)),
+              child: Text(
+                'Products (${items.length})',
+                style: sans(13, weight: FontWeight.w600, color: kInkMuted),
+              ),
             ),
             FilterPill(
               label: showInactive ? 'Hiding discontinued' : 'Show discontinued',
@@ -1691,29 +2103,47 @@ class _CatalogTab extends StatelessWidget {
                         Row(
                           children: [
                             Flexible(
-                              child: Text(c.name,
-                                  style: sans(13.5,
-                                      weight: FontWeight.w600,
-                                      color: c.isActive ? kInk : kInkMuted)),
+                              child: Text(
+                                c.name,
+                                style: sans(
+                                  13.5,
+                                  weight: FontWeight.w600,
+                                  color: c.isActive ? kInk : kInkMuted,
+                                ),
+                              ),
                             ),
                             if (c.requiresPrescription) ...[
                               const SizedBox(width: 6),
-                              const StatusPill(label: 'Rx', bg: kPrimaryTint, fg: kPrimary),
+                              const StatusPill(
+                                label: 'Rx',
+                                bg: kPrimaryTint,
+                                fg: kPrimary,
+                              ),
                             ],
                             if (!c.isActive) ...[
                               const SizedBox(width: 6),
-                              const StatusPill(label: 'Stopped', bg: kSurface, fg: kInkMuted),
+                              const StatusPill(
+                                label: 'Stopped',
+                                bg: kSurface,
+                                fg: kInkMuted,
+                              ),
                             ],
                           ],
                         ),
                         const SizedBox(height: 2),
-                        Text('${c.category} · ${c.unit} · reorder at ${_fmtQty(c.reorderLevel)}',
-                            style: sans(11.5, color: kInkMuted)),
+                        Text(
+                          '${c.category} · ${c.unit} · reorder at ${_fmtQty(c.reorderLevel)}',
+                          style: sans(11.5, color: kInkMuted),
+                        ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.edit_outlined, size: 18, color: kInkMuted),
+                    icon: const Icon(
+                      Icons.edit_outlined,
+                      size: 18,
+                      color: kInkMuted,
+                    ),
                     tooltip: 'Edit',
                     onPressed: () => onEdit(c),
                   ),
@@ -1740,7 +2170,11 @@ class _FilterResult {
   final String? branchId;
   final String? category;
   final bool branchChanged;
-  const _FilterResult({required this.branchId, required this.category, required this.branchChanged});
+  const _FilterResult({
+    required this.branchId,
+    required this.category,
+    required this.branchChanged,
+  });
 }
 
 class _FiltersSheet extends StatefulWidget {
@@ -1771,10 +2205,16 @@ class _FiltersSheetState extends State<_FiltersSheet> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Branch', style: sans(13, weight: FontWeight.w600, color: kInkMuted)),
+          Text(
+            'Branch',
+            style: sans(13, weight: FontWeight.w600, color: kInkMuted),
+          ),
           const SizedBox(height: 8),
           Container(
-            decoration: BoxDecoration(border: Border.all(color: kBorder), borderRadius: BorderRadius.circular(10)),
+            decoration: BoxDecoration(
+              border: Border.all(color: kBorder),
+              borderRadius: BorderRadius.circular(10),
+            ),
             child: Column(
               children: [
                 RadioListTile<String?>(
@@ -1798,7 +2238,10 @@ class _FiltersSheetState extends State<_FiltersSheet> {
             ),
           ),
           const SizedBox(height: 16),
-          Text('Category', style: sans(13, weight: FontWeight.w600, color: kInkMuted)),
+          Text(
+            'Category',
+            style: sans(13, weight: FontWeight.w600, color: kInkMuted),
+          ),
           const SizedBox(height: 8),
           Wrap(
             spacing: 8,
@@ -1813,7 +2256,8 @@ class _FiltersSheetState extends State<_FiltersSheet> {
                 FilterPill(
                   label: c,
                   selected: _category == c,
-                  onTap: () => setState(() => _category = _category == c ? null : c),
+                  onTap: () =>
+                      setState(() => _category = _category == c ? null : c),
                 ),
             ],
           ),
@@ -1833,16 +2277,245 @@ class _FiltersSheetState extends State<_FiltersSheet> {
               const SizedBox(width: 10),
               Expanded(
                 child: FilledButton(
-                  onPressed: () => Navigator.of(context).pop(_FilterResult(
-                    branchId: _branchId,
-                    category: _category,
-                    branchChanged: _branchId != widget.branchId,
-                  )),
+                  onPressed: () => Navigator.of(context).pop(
+                    _FilterResult(
+                      branchId: _branchId,
+                      category: _category,
+                      branchChanged: _branchId != widget.branchId,
+                    ),
+                  ),
                   style: primaryButtonStyle(),
                   child: const Text('Apply'),
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// ADD STOCK SHEET — creates one sellable batch for a selected branch
+// ============================================================================
+
+class _AddStockSheet extends StatefulWidget {
+  final InventoryRepository repo;
+  final List<InvBranch> branches;
+  final List<CatalogItem> items;
+
+  const _AddStockSheet({
+    required this.repo,
+    required this.branches,
+    required this.items,
+  });
+
+  @override
+  State<_AddStockSheet> createState() => _AddStockSheetState();
+}
+
+class _AddStockSheetState extends State<_AddStockSheet> {
+  final _quantityCtrl = TextEditingController();
+  final _buyingCtrl = TextEditingController();
+  final _retailCtrl = TextEditingController();
+  final _wholesaleCtrl = TextEditingController();
+  final _batchCtrl = TextEditingController();
+  String? _branchId;
+  String? _itemId;
+  DateTime? _expiryDate;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _quantityCtrl.dispose();
+    _buyingCtrl.dispose();
+    _retailCtrl.dispose();
+    _wholesaleCtrl.dispose();
+    _batchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickExpiry() async {
+    final picked = await showDatePicker(
+      context: context,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 3650)),
+      initialDate: _expiryDate ?? DateTime.now(),
+    );
+    if (picked != null) setState(() => _expiryDate = picked);
+  }
+
+  Future<void> _submit() async {
+    final quantity = double.tryParse(_quantityCtrl.text.trim());
+    final buying = double.tryParse(_buyingCtrl.text.trim());
+    final retail = double.tryParse(_retailCtrl.text.trim());
+    final wholesale = _wholesaleCtrl.text.trim().isEmpty
+        ? null
+        : double.tryParse(_wholesaleCtrl.text.trim());
+    if (_branchId == null || _itemId == null) {
+      setState(() => _error = 'Choose a branch and item.');
+      return;
+    }
+    if (quantity == null || buying == null || retail == null || quantity <= 0) {
+      setState(() => _error = 'Enter a valid quantity and prices.');
+      return;
+    }
+    if (wholesale == null && _wholesaleCtrl.text.trim().isNotEmpty) {
+      setState(
+        () => _error = 'Enter a valid wholesale price or leave it empty.',
+      );
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await widget.repo.addStock(
+        branchId: _branchId!,
+        itemId: _itemId!,
+        quantity: quantity,
+        buyingPrice: buying,
+        retailPrice: retail,
+        wholesalePrice: wholesale,
+        batchNumber: _batchCtrl.text,
+        expiryDate: _expiryDate,
+      );
+      if (mounted) Navigator.of(context).pop(true);
+    } on InventoryException catch (e) {
+      if (mounted)
+        setState(() {
+          _saving = false;
+          _error = e.message;
+        });
+    } catch (e) {
+      if (mounted)
+        setState(() {
+          _saving = false;
+          _error = e.toString();
+        });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SheetFrame(
+      title: 'Add stock',
+      subtitle: 'The new batch will be available for sale immediately.',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          DropdownButtonFormField<String>(
+            value: _branchId,
+            decoration: fieldDecoration('Branch'),
+            items: widget.branches
+                .map((b) => DropdownMenuItem(value: b.id, child: Text(b.name)))
+                .toList(),
+            onChanged: _saving
+                ? null
+                : (value) => setState(() => _branchId = value),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: _itemId,
+            decoration: fieldDecoration('Item'),
+            items: widget.items
+                .map(
+                  (item) => DropdownMenuItem(
+                    value: item.id,
+                    child: Text('${item.name} · ${item.unit}'),
+                  ),
+                )
+                .toList(),
+            onChanged: _saving
+                ? null
+                : (value) => setState(() => _itemId = value),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _quantityCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: fieldDecoration('Quantity'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: _batchCtrl,
+                  decoration: fieldDecoration('Batch number', hint: 'Optional'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _buyingCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: fieldDecoration('Buying price'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: _retailCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: fieldDecoration('Selling price'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _wholesaleCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: fieldDecoration('Wholesale price', hint: 'Optional'),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _saving ? null : _pickExpiry,
+            style: outlineButtonStyle(),
+            icon: const Icon(Icons.event_outlined, size: 18),
+            label: Text(
+              _expiryDate == null
+                  ? 'Expiry date (optional)'
+                  : _fmtDate(_expiryDate!.toIso8601String()),
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _error!,
+              style: sans(12.5, weight: FontWeight.w600, color: kDanger),
+            ),
+          ],
+          const SizedBox(height: 16),
+          FilledButton(
+            onPressed: _saving ? null : _submit,
+            style: primaryButtonStyle(),
+            child: _saving
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text('Add sellable stock'),
           ),
         ],
       ),
@@ -1884,7 +2557,10 @@ class _AdjustSheetState extends State<_AdjustSheet> {
       return;
     }
     if (_reasonCtrl.text.trim().isEmpty) {
-      setState(() => _formError = 'A reason is required — it goes into the movement log.');
+      setState(
+        () => _formError =
+            'A reason is required — it goes into the movement log.',
+      );
       return;
     }
     setState(() {
@@ -1933,15 +2609,25 @@ class _AdjustSheetState extends State<_AdjustSheet> {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: kBorder),
             ),
-            child: Text('${_fmtQty(b.qtyAvailable)} on hand',
-                style: mono(14, weight: FontWeight.w700, color: kInk)),
+            child: Text(
+              '${_fmtQty(b.qtyAvailable)} on hand',
+              style: mono(14, weight: FontWeight.w700, color: kInk),
+            ),
           ),
           const SizedBox(height: 14),
           Row(
             children: [
-              FilterPill(label: 'Remove', selected: _removing, onTap: () => setState(() => _removing = true)),
+              FilterPill(
+                label: 'Remove',
+                selected: _removing,
+                onTap: () => setState(() => _removing = true),
+              ),
               const SizedBox(width: 8),
-              FilterPill(label: 'Add back', selected: !_removing, onTap: () => setState(() => _removing = false)),
+              FilterPill(
+                label: 'Add back',
+                selected: !_removing,
+                onTap: () => setState(() => _removing = false),
+              ),
             ],
           ),
           const SizedBox(height: 14),
@@ -1949,7 +2635,9 @@ class _AdjustSheetState extends State<_AdjustSheet> {
             controller: _qtyCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: sans(14, color: kInk),
-            decoration: fieldDecoration(_removing ? 'Quantity to remove' : 'Quantity to add back'),
+            decoration: fieldDecoration(
+              _removing ? 'Quantity to remove' : 'Quantity to add back',
+            ),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -1957,11 +2645,17 @@ class _AdjustSheetState extends State<_AdjustSheet> {
             style: sans(14, color: kInk),
             minLines: 2,
             maxLines: 3,
-            decoration: fieldDecoration('Reason', hint: 'e.g. 3 bottles broken in transit'),
+            decoration: fieldDecoration(
+              'Reason',
+              hint: 'e.g. 3 bottles broken in transit',
+            ),
           ),
           if (_formError != null) ...[
             const SizedBox(height: 10),
-            Text(_formError!, style: sans(12.5, weight: FontWeight.w600, color: kDanger)),
+            Text(
+              _formError!,
+              style: sans(12.5, weight: FontWeight.w600, color: kDanger),
+            ),
           ],
           const SizedBox(height: 16),
           FilledButton(
@@ -1969,7 +2663,13 @@ class _AdjustSheetState extends State<_AdjustSheet> {
             style: primaryButtonStyle(),
             child: _saving
                 ? const SizedBox(
-                    width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Text('Save adjustment'),
           ),
         ],
@@ -1992,12 +2692,15 @@ class _PriceSheet extends StatefulWidget {
 }
 
 class _PriceSheetState extends State<_PriceSheet> {
-  late final TextEditingController _buy =
-      TextEditingController(text: widget.batch.buyingPrice.toStringAsFixed(0));
-  late final TextEditingController _retail =
-      TextEditingController(text: widget.batch.retailPrice.toStringAsFixed(0));
-  late final TextEditingController _whole =
-      TextEditingController(text: widget.batch.wholesalePrice?.toStringAsFixed(0) ?? '');
+  late final TextEditingController _buy = TextEditingController(
+    text: widget.batch.buyingPrice.toStringAsFixed(0),
+  );
+  late final TextEditingController _retail = TextEditingController(
+    text: widget.batch.retailPrice.toStringAsFixed(0),
+  );
+  late final TextEditingController _whole = TextEditingController(
+    text: widget.batch.wholesalePrice?.toStringAsFixed(0) ?? '',
+  );
   bool _saving = false;
   String? _formError;
 
@@ -2012,8 +2715,14 @@ class _PriceSheetState extends State<_PriceSheet> {
   Future<void> _submit() async {
     final buy = double.tryParse(_buy.text.trim());
     final retail = double.tryParse(_retail.text.trim());
-    final whole = _whole.text.trim().isEmpty ? null : double.tryParse(_whole.text.trim());
-    if (buy == null || buy < 0 || retail == null || retail < 0 || (_whole.text.trim().isNotEmpty && whole == null)) {
+    final whole = _whole.text.trim().isEmpty
+        ? null
+        : double.tryParse(_whole.text.trim());
+    if (buy == null ||
+        buy < 0 ||
+        retail == null ||
+        retail < 0 ||
+        (_whole.text.trim().isNotEmpty && whole == null)) {
       setState(() => _formError = 'Enter valid prices (zero or above).');
       return;
     }
@@ -2049,25 +2758,34 @@ class _PriceSheetState extends State<_PriceSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TextField(
-              controller: _buy,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: sans(14, color: kInk),
-              decoration: fieldDecoration('Buying price (MK)')),
+            controller: _buy,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: sans(14, color: kInk),
+            decoration: fieldDecoration('Buying price (MK)'),
+          ),
           const SizedBox(height: 12),
           TextField(
-              controller: _retail,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: sans(14, color: kInk),
-              decoration: fieldDecoration('Retail price (MK)')),
+            controller: _retail,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: sans(14, color: kInk),
+            decoration: fieldDecoration('Retail price (MK)'),
+          ),
           const SizedBox(height: 12),
           TextField(
-              controller: _whole,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: sans(14, color: kInk),
-              decoration: fieldDecoration('Wholesale price (MK)', hint: 'Optional')),
+            controller: _whole,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            style: sans(14, color: kInk),
+            decoration: fieldDecoration(
+              'Wholesale price (MK)',
+              hint: 'Optional',
+            ),
+          ),
           if (_formError != null) ...[
             const SizedBox(height: 10),
-            Text(_formError!, style: sans(12.5, weight: FontWeight.w600, color: kDanger)),
+            Text(
+              _formError!,
+              style: sans(12.5, weight: FontWeight.w600, color: kDanger),
+            ),
           ],
           const SizedBox(height: 16),
           FilledButton(
@@ -2075,7 +2793,13 @@ class _PriceSheetState extends State<_PriceSheet> {
             style: primaryButtonStyle(),
             child: _saving
                 ? const SizedBox(
-                    width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : const Text('Save prices'),
           ),
         ],
@@ -2092,19 +2816,31 @@ class _ItemFormSheet extends StatefulWidget {
   final InventoryRepository repo;
   final CatalogItem? item;
   final List<String> categories;
-  const _ItemFormSheet({required this.repo, this.item, required this.categories});
+  const _ItemFormSheet({
+    required this.repo,
+    this.item,
+    required this.categories,
+  });
 
   @override
   State<_ItemFormSheet> createState() => _ItemFormSheetState();
 }
 
 class _ItemFormSheetState extends State<_ItemFormSheet> {
-  late final TextEditingController _name = TextEditingController(text: widget.item?.name ?? '');
-  late final TextEditingController _category =
-      TextEditingController(text: widget.item?.category == 'Uncategorised' ? '' : (widget.item?.category ?? ''));
-  late final TextEditingController _unit = TextEditingController(text: widget.item?.unit ?? 'unit');
-  late final TextEditingController _reorder =
-      TextEditingController(text: (widget.item?.reorderLevel ?? 10).toStringAsFixed(0));
+  late final TextEditingController _name = TextEditingController(
+    text: widget.item?.name ?? '',
+  );
+  late final TextEditingController _category = TextEditingController(
+    text: widget.item?.category == 'Uncategorised'
+        ? ''
+        : (widget.item?.category ?? ''),
+  );
+  late final TextEditingController _unit = TextEditingController(
+    text: widget.item?.unit ?? 'unit',
+  );
+  late final TextEditingController _reorder = TextEditingController(
+    text: (widget.item?.reorderLevel ?? 10).toStringAsFixed(0),
+  );
   late bool _rx = widget.item?.requiresPrescription ?? false;
   bool _saving = false;
   String? _formError;
@@ -2151,7 +2887,9 @@ class _ItemFormSheetState extends State<_ItemFormSheet> {
           requiresPrescription: _rx,
         );
       }
-      if (mounted) Navigator.of(context).pop(widget.item == null ? 'Item added.' : 'Item updated.');
+      if (mounted)
+        Navigator.of(context)
+            .pop(widget.item == null ? 'Item added.' : 'Item updated.');
     } on InventoryException catch (e) {
       if (mounted) {
         setState(() {
@@ -2173,44 +2911,63 @@ class _ItemFormSheetState extends State<_ItemFormSheet> {
   Widget build(BuildContext context) {
     return SheetFrame(
       title: widget.item == null ? 'Add item' : 'Edit item',
-      subtitle: widget.item == null ? 'New product in the catalog.' : widget.item!.name,
+      subtitle: widget.item == null
+          ? 'New product in the catalog.'
+          : widget.item!.name,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(controller: _name, style: sans(14, color: kInk), decoration: fieldDecoration('Item name')),
+          TextField(
+            controller: _name,
+            style: sans(14, color: kInk),
+            decoration: fieldDecoration('Item name'),
+          ),
           const SizedBox(height: 12),
           TextField(
-              controller: _category,
-              style: sans(14, color: kInk),
-              decoration: fieldDecoration('Category', hint: 'e.g. Antibiotics')),
+            controller: _category,
+            style: sans(14, color: kInk),
+            decoration: fieldDecoration('Category', hint: 'e.g. Antibiotics'),
+          ),
           const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
-                  child: TextField(
-                      controller: _unit,
-                      style: sans(14, color: kInk),
-                      decoration: fieldDecoration('Unit', hint: 'tablet, bottle…'))),
+                child: TextField(
+                  controller: _unit,
+                  style: sans(14, color: kInk),
+                  decoration: fieldDecoration('Unit', hint: 'tablet, bottle…'),
+                ),
+              ),
               const SizedBox(width: 10),
               Expanded(
-                  child: TextField(
-                      controller: _reorder,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      style: sans(14, color: kInk),
-                      decoration: fieldDecoration('Reorder level'))),
+                child: TextField(
+                  controller: _reorder,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  style: sans(14, color: kInk),
+                  decoration: fieldDecoration('Reorder level'),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
           SwitchListTile(
             value: _rx,
             onChanged: (v) => setState(() => _rx = v),
-            title: Text('Requires prescription', style: sans(13.5, color: kInk)),
+            title: Text(
+              'Requires prescription',
+              style: sans(13.5, color: kInk),
+            ),
             activeColor: kPrimary,
             contentPadding: EdgeInsets.zero,
           ),
           if (_formError != null) ...[
             const SizedBox(height: 6),
-            Text(_formError!, style: sans(12.5, weight: FontWeight.w600, color: kDanger)),
+            Text(
+              _formError!,
+              style: sans(12.5, weight: FontWeight.w600, color: kDanger),
+            ),
           ],
           const SizedBox(height: 12),
           FilledButton(
@@ -2218,7 +2975,13 @@ class _ItemFormSheetState extends State<_ItemFormSheet> {
             style: primaryButtonStyle(),
             child: _saving
                 ? const SizedBox(
-                    width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                 : Text(widget.item == null ? 'Add item' : 'Save changes'),
           ),
         ],

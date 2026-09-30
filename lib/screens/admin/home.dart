@@ -39,12 +39,15 @@ class _AdminHomeRouteState extends State<AdminHomeRoute> {
       future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
 
         if (snapshot.hasError || !snapshot.hasData) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+            Navigator.of(context)
+                .pushNamedAndRemoveUntil('/login', (route) => false);
           });
           return const Scaffold(body: SizedBox.shrink());
         }
@@ -117,7 +120,20 @@ String _formatMk(double amount) {
 String _formatDate(String raw) {
   try {
     final d = DateTime.parse(raw);
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     final m = months[d.month - 1];
     return '${d.day} $m ${d.year}';
   } catch (_) {
@@ -211,10 +227,12 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                 ),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(minHeight: constraints.maxHeight),
-                  child: Center(
+                  child: Align(
+                    alignment: Alignment.topCenter,
                     child: ConstrainedBox(
-                      constraints:
-                      BoxConstraints(maxWidth: isDesktop ? 1080 : double.infinity),
+                      constraints: BoxConstraints(
+                        maxWidth: isDesktop ? 1080 : double.infinity,
+                      ),
                       child: FutureBuilder<AdminHomeData>(
                         future: _dataFuture,
                         builder: (context, snapshot) {
@@ -224,7 +242,8 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                             onBranchChanged: _onBranchChanged,
                           );
 
-                          if (snapshot.connectionState == ConnectionState.waiting) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -233,7 +252,9 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                                 const Center(
                                   child: Padding(
                                     padding: EdgeInsets.only(top: 40),
-                                    child: CircularProgressIndicator(color: _kPrimary),
+                                    child: CircularProgressIndicator(
+                                      color: _kPrimary,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -246,7 +267,10 @@ class _AdminHomeScreenState extends State<AdminHomeScreen> {
                               children: [
                                 header,
                                 const SizedBox(height: 40),
-                                _ErrorState(message: '${snapshot.error}', onRetry: _refresh),
+                                _ErrorState(
+                                  message: '${snapshot.error}',
+                                  onRetry: _refresh,
+                                ),
                               ],
                             );
                           }
@@ -277,12 +301,18 @@ class _ErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(border: Border.all(color: _kBorder), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        border: Border.all(color: _kBorder),
+        borderRadius: BorderRadius.circular(12),
+      ),
       padding: const EdgeInsets.all(18),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Couldn\'t load the dashboard', style: _sans(14, weight: FontWeight.w600, color: _kInk)),
+          Text(
+            'Couldn\'t load the dashboard',
+            style: _sans(14, weight: FontWeight.w600, color: _kInk),
+          ),
           const SizedBox(height: 6),
           Text(message, style: _sans(12.5, color: _kInkMuted)),
           const SizedBox(height: 12),
@@ -301,16 +331,27 @@ class _Header extends StatelessWidget {
   final List<Branch> branches;
   final String? selectedBranchId;
   final ValueChanged<String?> onBranchChanged;
-  const _Header({required this.branches, required this.selectedBranchId, required this.onBranchChanged});
+  const _Header({
+    required this.branches,
+    required this.selectedBranchId,
+    required this.onBranchChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Text('Business Overview', style: _sans(22, weight: FontWeight.w700, color: _kInk)),
+        Text(
+          'Business Overview',
+          style: _sans(22, weight: FontWeight.w700, color: _kInk),
+        ),
         const Spacer(),
-        _BranchDropdown(branches: branches, selectedId: selectedBranchId, onChanged: onBranchChanged),
+        _BranchDropdown(
+          branches: branches,
+          selectedId: selectedBranchId,
+          onChanged: onBranchChanged,
+        ),
       ],
     );
   }
@@ -320,23 +361,43 @@ class _BranchDropdown extends StatelessWidget {
   final List<Branch> branches;
   final String? selectedId;
   final ValueChanged<String?> onChanged;
-  const _BranchDropdown({required this.branches, required this.selectedId, required this.onChanged});
+  const _BranchDropdown({
+    required this.branches,
+    required this.selectedId,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(border: Border.all(color: _kBorder), borderRadius: BorderRadius.circular(9)),
+      decoration: BoxDecoration(
+        border: Border.all(color: _kBorder),
+        borderRadius: BorderRadius.circular(9),
+      ),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String?>(
           value: selectedId,
-          icon: const Icon(Icons.keyboard_arrow_down, size: 18, color: _kInkMuted),
+          icon: const Icon(
+            Icons.keyboard_arrow_down,
+            size: 18,
+            color: _kInkMuted,
+          ),
           style: _sans(13.5, weight: FontWeight.w500, color: _kInk),
-          hint: Text('All Branches', style: _sans(13.5, weight: FontWeight.w500, color: _kInk)),
+          hint: Text(
+            'All Branches',
+            style: _sans(13.5, weight: FontWeight.w500, color: _kInk),
+          ),
           onChanged: onChanged,
           items: [
-            const DropdownMenuItem<String?>(value: null, child: Text('All Branches')),
-            ...branches.map((b) => DropdownMenuItem<String?>(value: b.id, child: Text(b.name))),
+            const DropdownMenuItem<String?>(
+              value: null,
+              child: Text('All Branches'),
+            ),
+            ...branches.map(
+              (b) =>
+                  DropdownMenuItem<String?>(value: b.id, child: Text(b.name)),
+            ),
           ],
         ),
       ),
@@ -366,25 +427,45 @@ class _MobileLayout extends StatelessWidget {
         const SizedBox(height: 20),
         Row(
           children: [
-            Expanded(child: _StatCard(label: 'Sales today', value: 'MK ${_formatMk(data.salesToday)}', sub: '${data.salesTransactionsToday} transactions')),
+            Expanded(
+              child: _StatCard(
+                label: 'Sales today',
+                value: 'MK ${_formatMk(data.salesToday)}',
+                sub: '${data.salesTransactionsToday} transactions',
+              ),
+            ),
             const SizedBox(width: 12),
-            Expanded(child: _StatCard(label: 'Credit given today', value: 'MK ${_formatMk(data.creditToday)}', sub: '${data.creditSalesToday} credit sales', valueColor: _kDebtColor)),
+            Expanded(
+              child: _StatCard(
+                label: 'Credit given today',
+                value: 'MK ${_formatMk(data.creditToday)}',
+                sub: '${data.creditSalesToday} credit sales',
+                valueColor: _kDebtColor,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 12),
         _StatCard(
           label: 'Expenses today',
           value: 'MK ${_formatMk(data.expensesToday)}',
-          sub: '${data.expensesCountToday} ${data.expensesCountToday == 1 ? 'expense' : 'expenses'} recorded',
+          sub:
+              '${data.expensesCountToday} ${data.expensesCountToday == 1 ? 'expense' : 'expenses'} recorded',
         ),
         const SizedBox(height: 22),
         _SectionLabel('Sales by branch'),
         const SizedBox(height: 10),
         _BranchSalesList(branches: data.branchSales),
         const SizedBox(height: 22),
-        _ExpensesSection(expenses: data.recentExpenses, expensesToday: data.expensesToday),
+        _ExpensesSection(
+          expenses: data.recentExpenses,
+          expensesToday: data.expensesToday,
+        ),
         const SizedBox(height: 22),
-        _AttentionButton(count: data.attentionItems.length, onTap: () => _openAttentionPage(context)),
+        _AttentionButton(
+          count: data.attentionItems.length,
+          onTap: () => _openAttentionPage(context),
+        ),
         const SizedBox(height: 12),
         const _StockAccessCard(),
         const SizedBox(height: 24),
@@ -411,15 +492,29 @@ class _DesktopLayout extends StatelessWidget {
         const SizedBox(height: 24),
         Row(
           children: [
-            Expanded(child: _StatCard(label: 'Sales today', value: 'MK ${_formatMk(data.salesToday)}', sub: '${data.salesTransactionsToday} transactions')),
+            Expanded(
+              child: _StatCard(
+                label: 'Sales today',
+                value: 'MK ${_formatMk(data.salesToday)}',
+                sub: '${data.salesTransactionsToday} transactions',
+              ),
+            ),
             const SizedBox(width: 16),
-            Expanded(child: _StatCard(label: 'Credit given today', value: 'MK ${_formatMk(data.creditToday)}', sub: '${data.creditSalesToday} credit sales', valueColor: _kDebtColor)),
+            Expanded(
+              child: _StatCard(
+                label: 'Credit given today',
+                value: 'MK ${_formatMk(data.creditToday)}',
+                sub: '${data.creditSalesToday} credit sales',
+                valueColor: _kDebtColor,
+              ),
+            ),
             const SizedBox(width: 16),
             Expanded(
               child: _StatCard(
                 label: 'Expenses today',
                 value: 'MK ${_formatMk(data.expensesToday)}',
-                sub: '${data.expensesCountToday} ${data.expensesCountToday == 1 ? 'expense' : 'expenses'} recorded',
+                sub:
+                    '${data.expensesCountToday} ${data.expensesCountToday == 1 ? 'expense' : 'expenses'} recorded',
               ),
             ),
           ],
@@ -448,17 +543,32 @@ class _DesktopLayout extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        _SectionLabel('Needs attention (${data.attentionItems.length})'),
+                        _SectionLabel(
+                          'Needs attention (${data.attentionItems.length})',
+                        ),
                         const Spacer(),
                         TextButton(
                           onPressed: () => _openAttentionPage(context),
-                          style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                          child: Text('View all', style: _sans(12.5, weight: FontWeight.w600, color: _kPrimary)),
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: Text(
+                            'View all',
+                            style: _sans(
+                              12.5,
+                              weight: FontWeight.w600,
+                              color: _kPrimary,
+                            ),
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 10),
-                    _AttentionInlineList(items: data.attentionItems.take(4).toList()),
+                    _AttentionInlineList(
+                      items: data.attentionItems.take(4).toList(),
+                    ),
                   ],
                 ),
               ),
@@ -466,7 +576,10 @@ class _DesktopLayout extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 28),
-        _ExpensesSection(expenses: data.recentExpenses, expensesToday: data.expensesToday),
+        _ExpensesSection(
+          expenses: data.recentExpenses,
+          expensesToday: data.expensesToday,
+        ),
         const SizedBox(height: 12),
         const _StockAccessCard(),
       ],
@@ -487,7 +600,10 @@ class _SectionLabel extends StatelessWidget {
   final String text;
   const _SectionLabel(this.text);
   @override
-  Widget build(BuildContext context) => Text(text, style: _sans(13, weight: FontWeight.w600, color: _kInkMuted));
+  Widget build(BuildContext context) => Text(
+    text,
+    style: _sans(13, weight: FontWeight.w600, color: _kInkMuted),
+  );
 }
 
 class _StatCard extends StatelessWidget {
@@ -495,19 +611,34 @@ class _StatCard extends StatelessWidget {
   final String value;
   final String sub;
   final Color? valueColor;
-  const _StatCard({required this.label, required this.value, required this.sub, this.valueColor});
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.sub,
+    this.valueColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(border: Border.all(color: _kBorder), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        border: Border.all(color: _kBorder),
+        borderRadius: BorderRadius.circular(12),
+      ),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label, style: _sans(12.5, color: _kInkMuted)),
           const SizedBox(height: 8),
-          Text(value, style: _mono(21, weight: FontWeight.w600, color: valueColor ?? _kInk)),
+          Text(
+            value,
+            style: _mono(
+              21,
+              weight: FontWeight.w600,
+              color: valueColor ?? _kInk,
+            ),
+          ),
           const SizedBox(height: 4),
           Text(sub, style: _sans(11.5, color: _kInkMuted)),
         ],
@@ -525,16 +656,23 @@ class _BranchSalesList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (branches.isEmpty) {
       return Container(
-        decoration: BoxDecoration(border: Border.all(color: _kBorder), borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(
+          border: Border.all(color: _kBorder),
+          borderRadius: BorderRadius.circular(12),
+        ),
         padding: const EdgeInsets.all(16),
         child: Text('No branches found.', style: _sans(13, color: _kInkMuted)),
       );
     }
-    final sorted = [...branches]..sort((a, b) => a.salesToday.compareTo(b.salesToday));
+    final sorted = [...branches]
+      ..sort((a, b) => a.salesToday.compareTo(b.salesToday));
     final maxVal = sorted.last.salesToday <= 0 ? 1.0 : sorted.last.salesToday;
 
     return Container(
-      decoration: BoxDecoration(border: Border.all(color: _kBorder), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        border: Border.all(color: _kBorder),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(
         children: List.generate(sorted.length, (i) {
           final b = sorted[i];
@@ -542,15 +680,29 @@ class _BranchSalesList extends StatelessWidget {
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
             decoration: BoxDecoration(
-              border: i == sorted.length - 1 ? null : const Border(bottom: BorderSide(color: _kBorder)),
+              border: i == sorted.length - 1
+                  ? null
+                  : const Border(bottom: BorderSide(color: _kBorder)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
                   children: [
-                    Expanded(child: Text(b.branchName, style: _sans(13.5, weight: FontWeight.w500, color: _kInk))),
-                    Text('MK ${_formatMk(b.salesToday)}', style: _mono(13.5, weight: FontWeight.w600, color: _kInk)),
+                    Expanded(
+                      child: Text(
+                        b.branchName,
+                        style: _sans(
+                          13.5,
+                          weight: FontWeight.w500,
+                          color: _kInk,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      'MK ${_formatMk(b.salesToday)}',
+                      style: _mono(13.5, weight: FontWeight.w600, color: _kInk),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -581,7 +733,8 @@ void _openExpensesSheet(BuildContext context, List<ExpenseRecord> expenses) {
     context,
     builder: (_) => SheetFrame(
       title: 'All expenses',
-      subtitle: '${expenses.length} ${expenses.length == 1 ? 'record' : 'records'} · latest first',
+      subtitle:
+          '${expenses.length} ${expenses.length == 1 ? 'record' : 'records'} · latest first',
       child: ExpensesSheetContent(expenses: expenses),
     ),
   );
@@ -599,7 +752,11 @@ class _ExpensesSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(child: _SectionLabel('Expenses · MK ${_formatMk(expensesToday)} today')),
+            Expanded(
+              child: _SectionLabel(
+                'Expenses · MK ${_formatMk(expensesToday)} today',
+              ),
+            ),
             const SizedBox(width: 12),
             if (expenses.length > 5)
               TextButton(
@@ -609,12 +766,18 @@ class _ExpensesSection extends StatelessWidget {
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                child: Text('View all', style: _sans(12.5, weight: FontWeight.w600, color: _kPrimary)),
+                child: Text(
+                  'View all',
+                  style: _sans(12.5, weight: FontWeight.w600, color: _kPrimary),
+                ),
               ),
           ],
         ),
         const SizedBox(height: 10),
-        _ExpenseList(expenses: expenses.take(5).toList(), showViewAll: expenses.length > 5),
+        _ExpenseList(
+          expenses: expenses.take(5).toList(),
+          showViewAll: expenses.length > 5,
+        ),
       ],
     );
   }
@@ -629,20 +792,31 @@ class _ExpenseList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (expenses.isEmpty) {
       return Container(
-        decoration: BoxDecoration(border: Border.all(color: _kBorder), borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(
+          border: Border.all(color: _kBorder),
+          borderRadius: BorderRadius.circular(12),
+        ),
         padding: const EdgeInsets.all(16),
-        child: Text('No expenses recorded for this filter.', style: _sans(13, color: _kInkMuted)),
+        child: Text(
+          'No expenses recorded for this filter.',
+          style: _sans(13, color: _kInkMuted),
+        ),
       );
     }
     return Container(
-      decoration: BoxDecoration(border: Border.all(color: _kBorder), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        border: Border.all(color: _kBorder),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(
         children: List.generate(expenses.length, (i) {
           final last = i == expenses.length - 1 && !showViewAll;
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              border: last ? null : const Border(bottom: BorderSide(color: _kBorder)),
+              border: last
+                  ? null
+                  : const Border(bottom: BorderSide(color: _kBorder)),
             ),
             child: _ExpenseRow(expense: expenses[i]),
           );
@@ -658,22 +832,34 @@ class _ExpenseRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = expense.description.trim().isNotEmpty ? expense.description.trim() : expense.category;
+    final title = expense.description.trim().isNotEmpty
+        ? expense.description.trim()
+        : expense.category;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           width: 34,
           height: 34,
-          decoration: BoxDecoration(color: const Color(0xFFF0F4FD), borderRadius: BorderRadius.circular(8)),
-          child: Icon(_expenseIcon(expense.category), size: 18, color: _kPrimary),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0F4FD),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            _expenseIcon(expense.category),
+            size: 18,
+            color: _kPrimary,
+          ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: _sans(13.5, weight: FontWeight.w500, color: _kInk)),
+              Text(
+                title,
+                style: _sans(13.5, weight: FontWeight.w500, color: _kInk),
+              ),
               const SizedBox(height: 2),
               Text(
                 '${expense.branchName} · ${expense.category} · ${_formatDate(expense.expenseDate)}',
@@ -683,7 +869,10 @@ class _ExpenseRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        Text('MK ${_formatMk(expense.amount)}', style: _mono(13.5, weight: FontWeight.w600, color: _kInk)),
+        Text(
+          'MK ${_formatMk(expense.amount)}',
+          style: _mono(13.5, weight: FontWeight.w600, color: _kInk),
+        ),
       ],
     );
   }
@@ -698,7 +887,12 @@ class ExpensesSheetContent extends StatelessWidget {
     if (expenses.isEmpty) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 24),
-        child: Center(child: Text('No expenses here.', style: _sans(13.5, color: _kInkMuted))),
+        child: Center(
+          child: Text(
+            'No expenses here.',
+            style: _sans(13.5, color: _kInkMuted),
+          ),
+        ),
       );
     }
     return ConstrainedBox(
@@ -706,7 +900,8 @@ class ExpensesSheetContent extends StatelessWidget {
       child: ListView.separated(
         shrinkWrap: true,
         itemCount: expenses.length,
-        separatorBuilder: (ctx, index) => const Divider(height: 1, color: _kBorder),
+        separatorBuilder: (ctx, index) =>
+            const Divider(height: 1, color: _kBorder),
         itemBuilder: (context, i) => Padding(
           padding: const EdgeInsets.symmetric(vertical: 10),
           child: _ExpenseRow(expense: expenses[i]),
@@ -730,24 +925,40 @@ class _AttentionButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Container(
-          decoration: BoxDecoration(border: Border.all(color: _kBorder), borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            border: Border.all(color: _kBorder),
+            borderRadius: BorderRadius.circular(12),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
           child: Row(
             children: [
               Container(
                 width: 34,
                 height: 34,
-                decoration: BoxDecoration(color: const Color(0xFFFBF0E2), borderRadius: BorderRadius.circular(8)),
-                child: const Icon(Icons.warning_amber_rounded, size: 18, color: _kWarnColor),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFBF0E2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.warning_amber_rounded,
+                  size: 18,
+                  color: _kWarnColor,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('$count things need attention', style: _sans(14, weight: FontWeight.w600, color: _kInk)),
+                    Text(
+                      '$count things need attention',
+                      style: _sans(14, weight: FontWeight.w600, color: _kInk),
+                    ),
                     const SizedBox(height: 2),
-                    Text('Low stock and expiring batches', style: _sans(12, color: _kInkMuted)),
+                    Text(
+                      'Low stock and expiring batches',
+                      style: _sans(12, color: _kInkMuted),
+                    ),
                   ],
                 ),
               ),
@@ -777,8 +988,8 @@ class _StockAccessCard extends StatelessWidget {
         final title = snap.hasError
             ? 'Stock access'
             : waiting == 0 && active == 0
-                ? 'No stock access requests'
-                : '$waiting waiting · $active active';
+            ? 'No stock access requests'
+            : '$waiting waiting · $active active';
         return Material(
           color: Colors.transparent,
           child: InkWell(
@@ -789,7 +1000,9 @@ class _StockAccessCard extends StatelessWidget {
             },
             child: Container(
               decoration: BoxDecoration(
-                  border: Border.all(color: _kBorder), borderRadius: BorderRadius.circular(12)),
+                border: Border.all(color: _kBorder),
+                borderRadius: BorderRadius.circular(12),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
               child: Row(
                 children: [
@@ -797,20 +1010,35 @@ class _StockAccessCard extends StatelessWidget {
                     width: 34,
                     height: 34,
                     decoration: BoxDecoration(
-                        color: waiting > 0 ? const Color(0xFFFBF0E2) : const Color(0xFFE4EAFB),
-                        borderRadius: BorderRadius.circular(8)),
-                    child: Icon(Icons.key_outlined,
-                        size: 18, color: waiting > 0 ? _kWarnColor : _kPrimary),
+                      color: waiting > 0
+                          ? const Color(0xFFFBF0E2)
+                          : const Color(0xFFE4EAFB),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.key_outlined,
+                      size: 18,
+                      color: waiting > 0 ? _kWarnColor : _kPrimary,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(title, style: _sans(14, weight: FontWeight.w600, color: _kInk)),
+                        Text(
+                          title,
+                          style: _sans(
+                            14,
+                            weight: FontWeight.w600,
+                            color: _kInk,
+                          ),
+                        ),
                         const SizedBox(height: 2),
-                        Text('Cashier stock permissions',
-                            style: _sans(12, color: _kInkMuted)),
+                        Text(
+                          'Cashier stock permissions',
+                          style: _sans(12, color: _kInkMuted),
+                        ),
                       ],
                     ),
                   ),
@@ -834,20 +1062,31 @@ class _AttentionInlineList extends StatelessWidget {
   Widget build(BuildContext context) {
     if (items.isEmpty) {
       return Container(
-        decoration: BoxDecoration(border: Border.all(color: _kBorder), borderRadius: BorderRadius.circular(12)),
+        decoration: BoxDecoration(
+          border: Border.all(color: _kBorder),
+          borderRadius: BorderRadius.circular(12),
+        ),
         padding: const EdgeInsets.all(16),
-        child: Text('Nothing needs attention right now.', style: _sans(13, color: _kInkMuted)),
+        child: Text(
+          'Nothing needs attention right now.',
+          style: _sans(13, color: _kInkMuted),
+        ),
       );
     }
     return Container(
-      decoration: BoxDecoration(border: Border.all(color: _kBorder), borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        border: Border.all(color: _kBorder),
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: Column(
         children: List.generate(items.length, (i) {
           final item = items[i];
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              border: i == items.length - 1 ? null : const Border(bottom: BorderSide(color: _kBorder)),
+              border: i == items.length - 1
+                  ? null
+                  : const Border(bottom: BorderSide(color: _kBorder)),
             ),
             child: _AttentionRow(item: item),
           );
@@ -871,16 +1110,25 @@ class _AttentionRow extends StatelessWidget {
           margin: const EdgeInsets.only(top: 3),
           width: 7,
           height: 7,
-          decoration: BoxDecoration(shape: BoxShape.circle, color: isLow ? _kWarnColor : _kDebtColor),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isLow ? _kWarnColor : _kDebtColor,
+          ),
         ),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(item.itemName, style: _sans(13.5, weight: FontWeight.w500, color: _kInk)),
+              Text(
+                item.itemName,
+                style: _sans(13.5, weight: FontWeight.w500, color: _kInk),
+              ),
               const SizedBox(height: 2),
-              Text('${item.branchName} · ${item.detail}', style: _sans(12, color: _kInkMuted)),
+              Text(
+                '${item.branchName} · ${item.detail}',
+                style: _sans(12, color: _kInkMuted),
+              ),
             ],
           ),
         ),
@@ -892,7 +1140,11 @@ class _AttentionRow extends StatelessWidget {
           ),
           child: Text(
             isLow ? 'Low stock' : 'Expiring',
-            style: _sans(10.5, weight: FontWeight.w600, color: isLow ? _kWarnColor : _kDebtColor),
+            style: _sans(
+              10.5,
+              weight: FontWeight.w600,
+              color: isLow ? _kWarnColor : _kDebtColor,
+            ),
           ),
         ),
       ],
@@ -917,9 +1169,15 @@ class _AttentionDetailContentState extends State<AttentionDetailContent> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filter == null ? widget.items : widget.items.where((i) => i.type == _filter).toList();
-    final lowCount = widget.items.where((i) => i.type == AttentionType.lowStock).length;
-    final expCount = widget.items.where((i) => i.type == AttentionType.expiring).length;
+    final filtered = _filter == null
+        ? widget.items
+        : widget.items.where((i) => i.type == _filter).toList();
+    final lowCount = widget.items
+        .where((i) => i.type == AttentionType.lowStock)
+        .length;
+    final expCount = widget.items
+        .where((i) => i.type == AttentionType.expiring)
+        .length;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -929,11 +1187,23 @@ class _AttentionDetailContentState extends State<AttentionDetailContent> {
           scrollDirection: Axis.horizontal,
           child: Row(
             children: [
-              _FilterChip(label: 'All (${widget.items.length})', selected: _filter == null, onTap: () => setState(() => _filter = null)),
+              _FilterChip(
+                label: 'All (${widget.items.length})',
+                selected: _filter == null,
+                onTap: () => setState(() => _filter = null),
+              ),
               const SizedBox(width: 8),
-              _FilterChip(label: 'Low stock ($lowCount)', selected: _filter == AttentionType.lowStock, onTap: () => setState(() => _filter = AttentionType.lowStock)),
+              _FilterChip(
+                label: 'Low stock ($lowCount)',
+                selected: _filter == AttentionType.lowStock,
+                onTap: () => setState(() => _filter = AttentionType.lowStock),
+              ),
               const SizedBox(width: 8),
-              _FilterChip(label: 'Expiring ($expCount)', selected: _filter == AttentionType.expiring, onTap: () => setState(() => _filter = AttentionType.expiring)),
+              _FilterChip(
+                label: 'Expiring ($expCount)',
+                selected: _filter == AttentionType.expiring,
+                onTap: () => setState(() => _filter = AttentionType.expiring),
+              ),
             ],
           ),
         ),
@@ -941,7 +1211,12 @@ class _AttentionDetailContentState extends State<AttentionDetailContent> {
         if (filtered.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: Text('Nothing here.', style: _sans(13.5, color: _kInkMuted))),
+            child: Center(
+              child: Text(
+                'Nothing here.',
+                style: _sans(13.5, color: _kInkMuted),
+              ),
+            ),
           )
         else
           ConstrainedBox(
@@ -949,7 +1224,8 @@ class _AttentionDetailContentState extends State<AttentionDetailContent> {
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: filtered.length,
-              separatorBuilder: (ctx, index) => const Divider(height: 1, color: _kBorder),
+              separatorBuilder: (ctx, index) =>
+                  const Divider(height: 1, color: _kBorder),
               itemBuilder: (context, i) => Padding(
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 child: _AttentionRow(item: filtered[i]),
@@ -979,7 +1255,10 @@ class _AttentionDetailScreenState extends State<AttentionDetailScreen> {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         foregroundColor: _kInk,
-        title: Text('Needs attention', style: _sans(16, weight: FontWeight.w700, color: _kInk)),
+        title: Text(
+          'Needs attention',
+          style: _sans(16, weight: FontWeight.w700, color: _kInk),
+        ),
       ),
       body: SafeArea(
         child: Padding(
@@ -995,7 +1274,11 @@ class _FilterChip extends StatelessWidget {
   final String label;
   final bool selected;
   final VoidCallback onTap;
-  const _FilterChip({required this.label, required this.selected, required this.onTap});
+  const _FilterChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1006,9 +1289,19 @@ class _FilterChip extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Container(
-          decoration: BoxDecoration(border: Border.all(color: selected ? _kPrimary : _kBorder), borderRadius: BorderRadius.circular(20)),
+          decoration: BoxDecoration(
+            border: Border.all(color: selected ? _kPrimary : _kBorder),
+            borderRadius: BorderRadius.circular(20),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
-          child: Text(label, style: _sans(12, weight: FontWeight.w600, color: selected ? Colors.white : _kInkMuted)),
+          child: Text(
+            label,
+            style: _sans(
+              12,
+              weight: FontWeight.w600,
+              color: selected ? Colors.white : _kInkMuted,
+            ),
+          ),
         ),
       ),
     );

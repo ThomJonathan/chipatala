@@ -30,7 +30,11 @@ final branchStockFilter = BranchStockFilter();
 class EmployeeHomeScreen extends StatefulWidget {
   final AppUser user;
   final String branchName;
-  const EmployeeHomeScreen({super.key, required this.user, required this.branchName});
+  const EmployeeHomeScreen({
+    super.key,
+    required this.user,
+    required this.branchName,
+  });
 
   @override
   State<EmployeeHomeScreen> createState() => _EmployeeHomeScreenState();
@@ -45,7 +49,20 @@ String _greeting() {
 
 String _todayLabel() {
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
   final n = DateTime.now();
   return '${days[n.weekday - 1]} ${n.day} ${months[n.month - 1]} ${n.year}';
 }
@@ -74,7 +91,10 @@ String _methodLabel(String m) {
   }
 }
 
-Future<T?> _showEmpSheet<T>(BuildContext context, {required WidgetBuilder builder}) {
+Future<T?> _showEmpSheet<T>(
+  BuildContext context, {
+  required WidgetBuilder builder,
+}) {
   final wide = MediaQuery.of(context).size.width >= empWideBreakpoint;
   if (wide) {
     return showDialog<T>(
@@ -153,7 +173,10 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
       });
     }
     try {
-      final data = await _repo.fetchHome(branchId: branchId, role: widget.user.role);
+      final data = await _repo.fetchHome(
+        branchId: branchId,
+        role: widget.user.role,
+      );
       if (!mounted) return;
       setState(() {
         _data = data;
@@ -212,11 +235,16 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
             if (snap.connectionState == ConnectionState.waiting) {
               return const Padding(
                 padding: EdgeInsets.symmetric(vertical: 28),
-                child: Center(child: CircularProgressIndicator(color: empPrimary)),
+                child: Center(
+                  child: CircularProgressIndicator(color: empPrimary),
+                ),
               );
             }
             if (snap.hasError || !snap.hasData) {
-              return Text('Couldn’t load the receipt.', style: empSans(13.5, color: empDanger));
+              return Text(
+                'Couldn’t load the receipt.',
+                style: empSans(13.5, color: empDanger),
+              );
             }
             final r = snap.data!;
             return Column(
@@ -231,26 +259,60 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(l.itemName, style: empSans(13.5, weight: FontWeight.w600, color: empInk)),
-                              Text('${empQty(l.qty)} × ${empMk(l.unitPrice)}',
-                                  style: empSans(12, color: empMuted)),
+                              Text(
+                                l.itemName,
+                                style: empSans(
+                                  13.5,
+                                  weight: FontWeight.w600,
+                                  color: empInk,
+                                ),
+                              ),
+                              Text(
+                                '${empQty(l.qty)} × ${empMk(l.unitPrice)}',
+                                style: empSans(12, color: empMuted),
+                              ),
                             ],
                           ),
                         ),
-                        Text(empMk(l.subtotal), style: empMono(13, weight: FontWeight.w600, color: empInk)),
+                        Text(
+                          empMk(l.subtotal),
+                          style: empMono(
+                            13,
+                            weight: FontWeight.w600,
+                            color: empInk,
+                          ),
+                        ),
                       ],
                     ),
                   ),
                 const Divider(color: empBorder),
                 Row(
                   children: [
-                    Expanded(child: Text('Total', style: empSans(14, weight: FontWeight.w700, color: empInk))),
-                    Text(empMk(r.total), style: empMono(15, weight: FontWeight.w700, color: empInk)),
+                    Expanded(
+                      child: Text(
+                        'Total',
+                        style: empSans(
+                          14,
+                          weight: FontWeight.w700,
+                          color: empInk,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      empMk(r.total),
+                      style: empMono(
+                        15,
+                        weight: FontWeight.w700,
+                        color: empInk,
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text('Paid ${empMk(r.paid)}${r.cashier.isNotEmpty ? ' · ${r.cashier}' : ''}',
-                    style: empSans(12, color: empMuted)),
+                Text(
+                  'Paid ${empMk(r.paid)}${r.cashier.isNotEmpty ? ' · ${r.cashier}' : ''}',
+                  style: empSans(12, color: empMuted),
+                ),
               ],
             );
           },
@@ -288,7 +350,12 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
               final tablet = !wide && c.maxWidth >= empTabletBreakpoint;
               return SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
-                padding: EdgeInsets.fromLTRB(wide ? 32 : 18, wide ? 28 : 14, wide ? 32 : 18, 24),
+                padding: EdgeInsets.fromLTRB(
+                  wide ? 32 : 18,
+                  wide ? 28 : 14,
+                  wide ? 32 : 18,
+                  24,
+                ),
                 child: Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 1080),
@@ -317,11 +384,21 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Couldn’t load Home', style: empSans(15, weight: FontWeight.w700, color: empInk)),
+              Text(
+                'Couldn’t load Home',
+                style: empSans(15, weight: FontWeight.w700, color: empInk),
+              ),
               const SizedBox(height: 6),
-              Text(_error ?? 'Something went wrong.', style: empSans(13, color: empMuted)),
+              Text(
+                _error ?? 'Something went wrong.',
+                style: empSans(13, color: empMuted),
+              ),
               const SizedBox(height: 14),
-              FilledButton(onPressed: _load, style: empPrimaryButton(height: 44), child: const Text('Retry')),
+              FilledButton(
+                onPressed: _load,
+                style: empPrimaryButton(height: 44),
+                child: const Text('Retry'),
+              ),
             ],
           ),
         ),
@@ -335,8 +412,17 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
       role: widget.user.role,
     );
     final action = _MainAction(isStock: _isStock);
-    final summary = _SummaryBlock(data: d, tablet: tablet, showManagerExtras: _isManager);
-    final alerts = _AlertsBlock(data: d, large: _isStock, stacked: wide, onTap: _goToStock);
+    final summary = _SummaryBlock(
+      data: d,
+      tablet: tablet,
+      showManagerExtras: _isManager,
+    );
+    final alerts = _AlertsBlock(
+      data: d,
+      large: _isStock,
+      stacked: wide,
+      onTap: _goToStock,
+    );
     final lookup = _LookupBlock(
       controller: _lookupCtrl,
       loading: _lookupLoading,
@@ -344,8 +430,14 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
       results: _lookupResults,
       onChanged: _runLookup,
     );
-    final recent = _isStock ? _MovementsBlock(moves: d.recentMoves) : _RecentSalesBlock(sales: d.recentSales, onTap: _openReceipt);
-    final owing = _OwingBlock(data: d, onPay: _openPaymentSheet);
+    final recent = _isStock
+        ? _MovementsBlock(moves: d.recentMoves)
+        : _RecentSalesBlock(sales: d.recentSales, onTap: _openReceipt);
+    final owing = _OwingBlock(
+      data: d,
+      onPay: _openPaymentSheet,
+      onOpenReports: () => EmployeeShell.switchTo(context, 3),
+    );
 
     if (wide) {
       // Desktop: greeting across the top; two columns below.
@@ -408,7 +500,10 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
       const SizedBox(height: 14),
       owing,
     ];
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: blocks);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: blocks,
+    );
   }
 }
 
@@ -420,7 +515,11 @@ class _Greeting extends StatelessWidget {
   final String userName;
   final String branchName;
   final String role;
-  const _Greeting({required this.userName, required this.branchName, required this.role});
+  const _Greeting({
+    required this.userName,
+    required this.branchName,
+    required this.role,
+  });
 
   String get _roleLabel {
     switch (role) {
@@ -439,11 +538,16 @@ class _Greeting extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final first = userName.trim().isEmpty ? 'there' : userName.trim().split(' ').first;
+    final first = userName.trim().isEmpty
+        ? 'there'
+        : userName.trim().split(' ').first;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('${_greeting()}, $first', style: empSans(22, weight: FontWeight.w700, color: empInk)),
+        Text(
+          '${_greeting()}, $first',
+          style: empSans(22, weight: FontWeight.w700, color: empInk),
+        ),
         const SizedBox(height: 4),
         Row(
           children: [
@@ -474,7 +578,10 @@ class _MainAction extends StatelessWidget {
       child: FilledButton.icon(
         onPressed: () => EmployeeShell.switchTo(context, isStock ? 2 : 1),
         style: empPrimaryButton(height: 58),
-        icon: Icon(isStock ? Icons.add_box_outlined : Icons.point_of_sale_outlined, size: 22),
+        icon: Icon(
+          isStock ? Icons.add_box_outlined : Icons.point_of_sale_outlined,
+          size: 22,
+        ),
         label: Text(isStock ? 'Receive stock' : 'New sale'),
       ),
     );
@@ -489,7 +596,11 @@ class _SummaryBlock extends StatelessWidget {
   final EmployeeHomeBundle data;
   final bool tablet;
   final bool showManagerExtras;
-  const _SummaryBlock({required this.data, required this.tablet, required this.showManagerExtras});
+  const _SummaryBlock({
+    required this.data,
+    required this.tablet,
+    required this.showManagerExtras,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -582,8 +693,13 @@ class _SummaryBlock extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 3),
       child: Row(
         children: [
-          Expanded(child: Text(label, style: empSans(12.5, color: empMuted))),
-          Text(empMk(amount), style: empMono(12.5, weight: FontWeight.w600, color: empInk)),
+          Expanded(
+            child: Text(label, style: empSans(12.5, color: empMuted)),
+          ),
+          Text(
+            empMk(amount),
+            style: empMono(12.5, weight: FontWeight.w600, color: empInk),
+          ),
         ],
       ),
     );
@@ -612,12 +728,17 @@ class _StatCard extends StatelessWidget {
         children: [
           Icon(icon, size: 18, color: empPrimary),
           const SizedBox(height: 8),
-          Text(value,
-              style: money
-                  ? empMono(17, weight: FontWeight.w700, color: empInk)
-                  : empSans(22, weight: FontWeight.w700, color: empInk)),
+          Text(
+            value,
+            style: money
+                ? empMono(17, weight: FontWeight.w700, color: empInk)
+                : empSans(22, weight: FontWeight.w700, color: empInk),
+          ),
           const SizedBox(height: 2),
-          Text(label, style: empSans(12, weight: FontWeight.w600, color: empMuted)),
+          Text(
+            label,
+            style: empSans(12, weight: FontWeight.w600, color: empMuted),
+          ),
           Text(sub, style: empSans(10.5, color: empMuted)),
         ],
       ),
@@ -634,7 +755,12 @@ class _AlertsBlock extends StatelessWidget {
   final bool large;
   final bool stacked;
   final ValueChanged<String?> onTap;
-  const _AlertsBlock({required this.data, required this.large, required this.stacked, required this.onTap});
+  const _AlertsBlock({
+    required this.data,
+    required this.large,
+    required this.stacked,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -714,7 +840,10 @@ class _AlertCard extends StatelessWidget {
                   Container(
                     width: large ? 38 : 32,
                     height: large ? 38 : 32,
-                    decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(9)),
+                    decoration: BoxDecoration(
+                      color: bg,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
                     child: Icon(icon, size: large ? 20 : 17, color: fg),
                   ),
                   const Spacer(),
@@ -722,8 +851,18 @@ class _AlertCard extends StatelessWidget {
                 ],
               ),
               SizedBox(height: large ? 12 : 8),
-              Text('$count', style: empSans(large ? 28 : 22, weight: FontWeight.w700, color: empInk)),
-              Text(title, style: empSans(12, weight: FontWeight.w600, color: empMuted)),
+              Text(
+                '$count',
+                style: empSans(
+                  large ? 28 : 22,
+                  weight: FontWeight.w700,
+                  color: empInk,
+                ),
+              ),
+              Text(
+                title,
+                style: empSans(12, weight: FontWeight.w600, color: empMuted),
+              ),
               Text(sub, style: empSans(10.5, color: empMuted)),
             ],
           ),
@@ -761,10 +900,15 @@ class _LookupBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Quick lookup', style: empSans(13.5, weight: FontWeight.w700, color: empInk)),
+          Text(
+            'Quick lookup',
+            style: empSans(13.5, weight: FontWeight.w700, color: empInk),
+          ),
           const SizedBox(height: 2),
-          Text('Prices and availability — no sale started.',
-              style: empSans(11.5, color: empMuted)),
+          Text(
+            'Prices and availability — no sale started.',
+            style: empSans(11.5, color: empMuted),
+          ),
           const SizedBox(height: 10),
           TextField(
             controller: controller,
@@ -790,7 +934,10 @@ class _LookupBlock extends StatelessWidget {
               child: SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, color: empPrimary),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: empPrimary,
+                ),
               ),
             ),
           ] else if (q.length >= 2) ...[
@@ -798,7 +945,10 @@ class _LookupBlock extends StatelessWidget {
             if (results.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Text('No items found for “$q”.', style: empSans(12.5, color: empMuted)),
+                child: Text(
+                  'No items found for “$q”.',
+                  style: empSans(12.5, color: empMuted),
+                ),
               )
             else
               for (final r in results)
@@ -811,7 +961,14 @@ class _LookupBlock extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(r.name, style: empSans(13.5, weight: FontWeight.w600, color: empInk)),
+                            Text(
+                              r.name,
+                              style: empSans(
+                                13.5,
+                                weight: FontWeight.w600,
+                                color: empInk,
+                              ),
+                            ),
                             const SizedBox(height: 2),
                             Text(
                               'Retail ${_price(r.retailMin, r.retailMax)}'
@@ -823,10 +980,22 @@ class _LookupBlock extends StatelessWidget {
                       ),
                       const SizedBox(width: 10),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                        decoration: BoxDecoration(color: empPrimaryTint, borderRadius: BorderRadius.circular(7)),
-                        child: Text('${empQty(r.qty)} left',
-                            style: empSans(11.5, weight: FontWeight.w700, color: empPrimary)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 9,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: empPrimaryTint,
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                        child: Text(
+                          '${empQty(r.qty)} left',
+                          style: empSans(
+                            11.5,
+                            weight: FontWeight.w700,
+                            color: empPrimary,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -852,7 +1021,10 @@ class _RecentSalesBlock extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Recent sales', style: empSans(13.5, weight: FontWeight.w700, color: empInk)),
+        Text(
+          'Recent sales',
+          style: empSans(13.5, weight: FontWeight.w700, color: empInk),
+        ),
         const SizedBox(height: 8),
         if (sales.isEmpty)
           const EmpEmpty(
@@ -868,14 +1040,21 @@ class _RecentSalesBlock extends StatelessWidget {
                 return Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(i == 0 || i == sales.length - 1 ? 12 : 0),
+                    borderRadius: BorderRadius.circular(
+                      i == 0 || i == sales.length - 1 ? 12 : 0,
+                    ),
                     onTap: () => onTap(s),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 11,
+                      ),
                       decoration: BoxDecoration(
                         border: i == sales.length - 1
                             ? null
-                            : const Border(bottom: BorderSide(color: empBorder)),
+                            : const Border(
+                                bottom: BorderSide(color: empBorder),
+                              ),
                       ),
                       child: Row(
                         children: [
@@ -883,7 +1062,14 @@ class _RecentSalesBlock extends StatelessWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(s.receipt, style: empSans(13, weight: FontWeight.w600, color: empInk)),
+                                Text(
+                                  s.receipt,
+                                  style: empSans(
+                                    13,
+                                    weight: FontWeight.w600,
+                                    color: empInk,
+                                  ),
+                                ),
                                 const SizedBox(height: 2),
                                 Text(
                                   '${_timeLabel(s.time)} · ${s.itemCount} ${s.itemCount == 1 ? 'item' : 'items'} · ${_methodLabel(s.method)}',
@@ -892,9 +1078,20 @@ class _RecentSalesBlock extends StatelessWidget {
                               ],
                             ),
                           ),
-                          Text(empMk(s.total), style: empMono(13, weight: FontWeight.w700, color: empInk)),
+                          Text(
+                            empMk(s.total),
+                            style: empMono(
+                              13,
+                              weight: FontWeight.w700,
+                              color: empInk,
+                            ),
+                          ),
                           const SizedBox(width: 4),
-                          const Icon(Icons.chevron_right, size: 17, color: empMuted),
+                          const Icon(
+                            Icons.chevron_right,
+                            size: 17,
+                            color: empMuted,
+                          ),
                         ],
                       ),
                     ),
@@ -940,10 +1137,16 @@ class _MovementsBlock extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Recent stock movements', style: empSans(13.5, weight: FontWeight.w700, color: empInk)),
+        Text(
+          'Recent stock movements',
+          style: empSans(13.5, weight: FontWeight.w700, color: empInk),
+        ),
         const SizedBox(height: 8),
         if (moves.isEmpty)
-          const EmpEmpty(icon: Icons.swap_horiz_outlined, message: 'No stock movements recorded yet.')
+          const EmpEmpty(
+            icon: Icons.swap_horiz_outlined,
+            message: 'No stock movements recorded yet.',
+          )
         else
           EmpCard(
             padding: EdgeInsets.zero,
@@ -952,7 +1155,10 @@ class _MovementsBlock extends StatelessWidget {
                 final m = moves[i];
                 final out = _isOut(m.type);
                 return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 11,
+                  ),
                   decoration: BoxDecoration(
                     border: i == moves.length - 1
                         ? null
@@ -964,16 +1170,30 @@ class _MovementsBlock extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(m.itemName, style: empSans(13, weight: FontWeight.w600, color: empInk)),
+                            Text(
+                              m.itemName,
+                              style: empSans(
+                                13,
+                                weight: FontWeight.w600,
+                                color: empInk,
+                              ),
+                            ),
                             const SizedBox(height: 2),
-                            Text('${_label(m.type)} · ${_timeLabel(m.time)}',
-                                style: empSans(11.5, color: empMuted)),
+                            Text(
+                              '${_label(m.type)} · ${_timeLabel(m.time)}',
+                              style: empSans(11.5, color: empMuted),
+                            ),
                           ],
                         ),
                       ),
-                      Text('${out ? '−' : '+'}${empQty(m.qty)}',
-                          style: empMono(13, weight: FontWeight.w700,
-                              color: out ? empDanger : empSuccess)),
+                      Text(
+                        '${out ? '−' : '+'}${empQty(m.qty)}',
+                        style: empMono(
+                          13,
+                          weight: FontWeight.w700,
+                          color: out ? empDanger : empSuccess,
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -992,57 +1212,82 @@ class _MovementsBlock extends StatelessWidget {
 class _OwingBlock extends StatelessWidget {
   final EmployeeHomeBundle data;
   final VoidCallback onPay;
-  const _OwingBlock({required this.data, required this.onPay});
+  final VoidCallback onOpenReports;
+  const _OwingBlock({
+    required this.data,
+    required this.onPay,
+    required this.onOpenReports,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return EmpCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(color: empPrimaryTint, borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.people_outline, size: 19, color: empPrimary),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      data.owingCount == 0
-                          ? 'No outstanding balances'
-                          : '${data.owingCount} ${data.owingCount == 1 ? 'customer owes' : 'customers owe'} ${empMk(data.owingTotal)}',
-                      style: empSans(13.5, weight: FontWeight.w700, color: empInk),
+    return InkWell(
+      onTap: onOpenReports,
+      borderRadius: BorderRadius.circular(12),
+      child: EmpCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: empPrimaryTint,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.people_outline,
+                    size: 19,
+                    color: empPrimary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        data.owingCount == 0
+                            ? 'No outstanding balances'
+                            : '${data.owingCount} ${data.owingCount == 1 ? 'customer owes' : 'customers owe'} ${empMk(data.owingTotal)}',
+                        style: empSans(
+                          13.5,
+                          weight: FontWeight.w700,
+                          color: empInk,
+                        ),
+                      ),
+                      Text(
+                        'Customer debts at this branch',
+                        style: empSans(11.5, color: empMuted),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (data.owingCount > 0) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onPay,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: empPrimary,
+                    minimumSize: const Size(0, 44),
+                    side: const BorderSide(color: empBorder),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    Text('Customer debts at this branch', style: empSans(11.5, color: empMuted)),
-                  ],
+                  ),
+                  icon: const Icon(Icons.payments_outlined, size: 18),
+                  label: const Text('Record payment'),
                 ),
               ),
             ],
-          ),
-          if (data.owingCount > 0) ...[
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: onPay,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: empPrimary,
-                  minimumSize: const Size(0, 44),
-                  side: const BorderSide(color: empBorder),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                ),
-                icon: const Icon(Icons.payments_outlined, size: 18),
-                label: const Text('Record payment'),
-              ),
-            ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -1143,7 +1388,9 @@ class _PaymentSheetState extends State<_PaymentSheet> {
       child: _loading
           ? const Padding(
               padding: EdgeInsets.symmetric(vertical: 28),
-              child: Center(child: CircularProgressIndicator(color: empPrimary)),
+              child: Center(
+                child: CircularProgressIndicator(color: empPrimary),
+              ),
             )
           : Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1174,7 +1421,9 @@ class _PaymentSheetState extends State<_PaymentSheet> {
                 const SizedBox(height: 12),
                 TextField(
                   controller: _amountCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                   style: empSans(14, color: empInk),
                   decoration: empField('Amount (MK)'),
                 ),
@@ -1193,7 +1442,10 @@ class _PaymentSheetState extends State<_PaymentSheet> {
                       style: empSans(14, color: empInk),
                       items: const [
                         DropdownMenuItem(value: 'cash', child: Text('Cash')),
-                        DropdownMenuItem(value: 'mobile_money', child: Text('Mobile money')),
+                        DropdownMenuItem(
+                          value: 'mobile_money',
+                          child: Text('Mobile money'),
+                        ),
                         DropdownMenuItem(value: 'card', child: Text('Card')),
                       ],
                       onChanged: (v) {
@@ -1204,7 +1456,14 @@ class _PaymentSheetState extends State<_PaymentSheet> {
                 ),
                 if (_formError != null) ...[
                   const SizedBox(height: 10),
-                  Text(_formError!, style: empSans(12.5, weight: FontWeight.w600, color: empDanger)),
+                  Text(
+                    _formError!,
+                    style: empSans(
+                      12.5,
+                      weight: FontWeight.w600,
+                      color: empDanger,
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 16),
                 FilledButton(
@@ -1214,7 +1473,10 @@ class _PaymentSheetState extends State<_PaymentSheet> {
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : const Text('Save payment'),
                 ),
