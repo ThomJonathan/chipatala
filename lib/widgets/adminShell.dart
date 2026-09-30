@@ -6,10 +6,11 @@ import '../screens/admin/stockAccessRepo.dart';
 
 // ============================================================================
 // ADMIN SHELL — one self-contained file: the admin navigation UI.
-//   - phone widths  -> floating bottom nav bar (all 6 screens)
+//   - phone widths  -> floating bottom nav bar (Home, Inventory, Reports, Settings)
 //   - desktop widths -> fixed side nav rail (all 6 screens)
 // Screens: Home, Inventory, Branches, Users, Reports, Settings.
-// Navigation bar is always visible on all screens with the active screen highlighted.
+// Desktop keeps all six destinations in the side rail; mobile exposes management
+// screens through Settings so the bottom bar stays compact.
 // ============================================================================
 
 const double _kDesktopBreakpoint = 760;
@@ -30,7 +31,7 @@ class _NavDestination {
   });
 }
 
-// All destinations: Home, Inventory, Branches, Users, Reports, Settings.
+// Desktop destinations: Home, Inventory, Branches, Users, Reports, Settings.
 const List<_NavDestination> _kDestinations = [
   _NavDestination(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home', pageIndex: 0),
   _NavDestination(icon: Icons.inventory_outlined, activeIcon: Icons.inventory, label: 'Inventory', pageIndex: 1),
@@ -201,10 +202,11 @@ class _BottomNav extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: _kDestinations.map((d) {
-            final active = d.pageIndex == selectedIndex;
+          children: _kDestinations.where((d) => d.pageIndex != 2 && d.pageIndex != 3).map((d) {
+            // Users and Branches are opened from Settings on mobile.
+            final active = d.pageIndex == selectedIndex ||
+                (d.pageIndex == 5 && (selectedIndex == 2 || selectedIndex == 3));
             final color = active ? primary : _kInkMuted;
-            final isUsers = d.pageIndex == 3;
             return Expanded(
               child: InkWell(
                 borderRadius: BorderRadius.circular(10),
@@ -214,33 +216,7 @@ class _BottomNav extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Count badge on Users while stock-access requests wait.
-                      ValueListenableBuilder<int>(
-                        valueListenable: stockAccessPendingCount,
-                        builder: (_, pending, __) => Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            Icon(active ? d.activeIcon : d.icon, size: 20, color: color),
-                            if (isUsers && pending > 0)
-                              Positioned(
-                                right: -8,
-                                top: -6,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFB4544A),
-                                    borderRadius: BorderRadius.circular(9),
-                                  ),
-                                  child: Text(
-                                    pending > 9 ? '9+' : '$pending',
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 9, fontWeight: FontWeight.w700),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
+                      Icon(active ? d.activeIcon : d.icon, size: 20, color: color),
                       const SizedBox(height: 2),
                       Text(
                         d.label,

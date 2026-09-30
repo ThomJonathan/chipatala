@@ -9,6 +9,8 @@ import 'adminui.dart';
 import 'inventoryRepo.dart';
 import 'stockAccessRepo.dart';
 
+final inventoryAttentionRequest = ValueNotifier<bool>(false);
+
 // ============================================================================
 // ADMIN INVENTORY — oversight and decisions, not data entry.
 //   Embedded page inside AdminShell (nav bars stay visible — this screen only
@@ -123,6 +125,8 @@ class _InventoryScreenState extends State<InventoryScreen> {
   DateTime? _activityFrom;
   DateTime? _activityTo;
   bool _wasInventorySelected = false;
+  bool _showNeedsAttention = false;
+  int _attentionFilter = 0; // 0 all, 1 low stock, 2 expiring
 
   bool _loading = true;
   String? _error;
@@ -154,6 +158,13 @@ class _InventoryScreenState extends State<InventoryScreen> {
     // the link always lands on results).
     final selected = AdminShellScope.of(context)?.selectedIndex == 1;
     if (selected && !_wasInventorySelected) {
+      if (inventoryAttentionRequest.value) {
+        inventoryAttentionRequest.value = false;
+        setState(() {
+          _showNeedsAttention = true;
+          _attentionFilter = 0;
+        });
+      }
       final f = stockActivityFilter.value;
       if (f != null) {
         stockActivityFilter.value = null;
@@ -499,12 +510,15 @@ class _InventoryScreenState extends State<InventoryScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        PageTitle(
-                          title: 'Inventory',
-                          subtitle: _loading
-                              ? 'Loading…'
-                              : '${_visibleItems.length} items · $_scopeName',
-                          trailing: _exporting
+                        if (_showNeedsAttention)
+                          _attentionTitle()
+                        else
+                          PageTitle(
+                            title: 'Inventory',
+                            subtitle: _loading
+                                ? 'Loading…'
+                                : '${_visibleItems.length} items · $_scopeName',
+                            trailing: _exporting
                               ? const SizedBox(
                                   width: 44,
                                   height: 44,
@@ -522,11 +536,15 @@ class _InventoryScreenState extends State<InventoryScreen> {
                                   icon: const Icon(Icons.download_outlined, size: 18),
                                   label: const Text('Export'),
                                 ),
-                        ),
+                          ),
                         const SizedBox(height: 18),
-                        _filterBar(wide),
-                        const SizedBox(height: 16),
-                        _body(wide),
+                        if (_showNeedsAttention)
+                          _attentionBody(wide)
+                        else ...[
+                          _filterBar(wide),
+                          const SizedBox(height: 16),
+                          _body(wide),
+                        ],
                       ],
                     ),
                   ),
@@ -536,6 +554,70 @@ class _InventoryScreenState extends State<InventoryScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _attentionTitle() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        IconButton(
+          onPressed: () => setState(() => _showNeedsAttention = false),
+          tooltip: 'Back to inventory',
+          icon: const Icon(Icons.arrow_back, color: kInk),
+          padding: EdgeInsets.zero,
+          alignment: Alignment.topLeft,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: PageTitle(
+            title: 'Needs attention',
+            subtitle: '${_low.length + _expiryBuckets().fold(0, (s, b) => s + b.length)} items requiring action',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _attentionBody(bool wide) {
+    final buckets = _expiryBuckets();
+    final expiryCount = buckets.fold(0, (s, b) => s + b.length);
+    final showLow = _attentionFilter == 0 || _attentionFilter == 1;
+    final showExpiry = _attentionFilter == 0 || _attentionFilter == 2;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              FilterPill(label: 'All (${_low.length + expiryCount})', selected: _attentionFilter == 0, onTap: () => setState(() => _attentionFilter = 0)),
+              const SizedBox(width: 8),
+              FilterPill(label: 'Low stock (${_low.length})', selected: _attentionFilter == 1, onTap: () => setState(() => _attentionFilter = 1)),
+              const SizedBox(width: 8),
+              FilterPill(label: 'Expiring (${expiryCount})', selected: _attentionFilter == 2, onTap: () => setState(() => _attentionFilter = 2)),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (showLow) ...[
+          Text('Low stock', style: sans(16, weight: FontWeight.w700, color: kInk)),
+          const SizedBox(height: 10),
+          _LowStockTab(rows: _low, wide: wide),
+          const SizedBox(height: 20),
+        ],
+        if (showExpiry) ...[
+          Text('Expiring and expired', style: sans(16, weight: FontWeight.w700, color: kInk)),
+          const SizedBox(height: 10),
+          _ExpiryTab(buckets: buckets, wide: wide, onAdjust: _adjust),
+        ],
+        if ((!showLow || _low.isEmpty) && (!showExpiry || expiryCount == 0))
+          const EmptyState(
+            icon: Icons.check_circle_outline,
+            title: 'Nothing needs attention',
+            message: 'Stock levels and expiry dates are currently healthy.',
+          ),
+      ],
     );
   }
 

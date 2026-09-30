@@ -384,7 +384,7 @@ class _MobileLayout extends StatelessWidget {
         const SizedBox(height: 22),
         _ExpensesSection(expenses: data.recentExpenses, expensesToday: data.expensesToday),
         const SizedBox(height: 22),
-        _AttentionButton(count: data.attentionItems.length, onTap: () => _openAttentionPage(context, data.attentionItems)),
+        _AttentionButton(count: data.attentionItems.length, onTap: () => _openAttentionPage(context)),
         const SizedBox(height: 12),
         const _StockAccessCard(),
         const SizedBox(height: 24),
@@ -451,7 +451,7 @@ class _DesktopLayout extends StatelessWidget {
                         _SectionLabel('Needs attention (${data.attentionItems.length})'),
                         const Spacer(),
                         TextButton(
-                          onPressed: () => _openAttentionPage(context, data.attentionItems),
+                          onPressed: () => _openAttentionPage(context),
                           style: TextButton.styleFrom(padding: EdgeInsets.zero, minimumSize: Size.zero, tapTargetSize: MaterialTapTargetSize.shrinkWrap),
                           child: Text('View all', style: _sans(12.5, weight: FontWeight.w600, color: _kPrimary)),
                         ),
@@ -474,15 +474,9 @@ class _DesktopLayout extends StatelessWidget {
   }
 }
 
-void _openAttentionPage(BuildContext context, List<AttentionItem> items) {
-  showAdaptiveSheet(
-    context,
-    builder: (_) => SheetFrame(
-      title: 'Needs attention',
-      subtitle: '${items.length} ${items.length == 1 ? 'item' : 'items'} requiring action',
-      child: AttentionDetailContent(items: items),
-    ),
-  );
+void _openAttentionPage(BuildContext context) {
+  inventoryAttentionRequest.value = true;
+  AdminShell.switchTo(context, 1);
 }
 
 // ============================================================================
