@@ -1633,6 +1633,12 @@ $$;
 
 ALTER TABLE users DROP COLUMN IF EXISTS can_manage_stock;   -- from the earlier idea
 
+DROP POLICY IF EXISTS "Record movements: admin all, staff own branch" ON stock_movements;
+DROP POLICY IF EXISTS "Record movements: admin or stock access at own branch" ON stock_movements;
+CREATE POLICY "Record movements: admin or stock access at own branch"
+    ON stock_movements FOR INSERT
+    WITH CHECK (is_admin() OR (branch_id = user_branch_id() AND has_stock_access()));
+
 -- Inventory, purchases and purchase lines now follow the helper
 DROP POLICY IF EXISTS "Inventory insert: admin, or manager/stock controller at own branch" ON inventory;
 DROP POLICY IF EXISTS "Inventory update: admin, or manager/stock controller at own branch" ON inventory;

@@ -134,13 +134,14 @@ class _StockAccessSectionState extends State<StockAccessSection> {
       context,
       builder: (_) => _DurationSheet(userName: r.userName),
     );
-    if (hours == _DurationSheet.cancelled) return;
+    if (hours == null || hours == _DurationSheet.cancelled) return;
+    final durationHours = hours == _DurationSheet.unlimited ? null : hours;
     try {
-      await _repo.decide(requestId: r.id, approve: true, hours: hours);
+      await _repo.decide(requestId: r.id, approve: true, hours: durationHours);
       await _load(silent: true);
       if (mounted) {
         showToast(context,
-            hours == null ? '${r.userName} can change stock until removed.' : '${r.userName} can change stock for $hours hour${hours == 1 ? '' : 's'}.');
+            durationHours == null ? '${r.userName} can change stock until removed.' : '${r.userName} can change stock for $durationHours hour${durationHours == 1 ? '' : 's'}.');
       }
     } on StockAccessException catch (e) {
       if (mounted) showToast(context, e.message, error: true);
@@ -1009,6 +1010,7 @@ class _DetailBody extends StatelessWidget {
 
 class _DurationSheet extends StatefulWidget {
   static const cancelled = -999;
+  static const unlimited = -998;
   final String userName;
   const _DurationSheet({required this.userName});
 
@@ -1091,7 +1093,7 @@ class _DurationSheetState extends State<_DurationSheet> {
           const SizedBox(height: 8),
           option(label: '8 hours', sub: 'Full shift', value: 8),
           const SizedBox(height: 8),
-          option(label: 'Until I remove it', sub: 'No time limit — remember to remove', value: null),
+          option(label: 'Until I remove it', sub: 'No time limit — remember to remove', value: _DurationSheet.unlimited),
           const SizedBox(height: 8),
           Material(
             color: _hours == -1 ? kPrimaryTint : Colors.transparent,
