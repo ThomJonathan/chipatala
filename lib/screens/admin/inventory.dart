@@ -446,13 +446,14 @@ class _InventoryScreenState extends State<InventoryScreen> {
     try {
       await _repo.setItemActive(item.id, !item.isActive);
       await _load();
-      if (mounted)
+      if (mounted) {
         showToast(
           context,
           item.isActive
               ? '${item.name} discontinued.'
               : '${item.name} is active again.',
         );
+      }
     } on InventoryException catch (e) {
       if (mounted) showToast(context, e.message, error: true);
     }
@@ -736,7 +737,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
               ),
               const SizedBox(width: 8),
               FilterPill(
-                label: 'Expiring (${expiryCount})',
+                label: 'Expiring ($expiryCount)',
                 selected: _attentionFilter == 2,
                 onTap: () => setState(() => _attentionFilter = 2),
               ),
@@ -2150,7 +2151,7 @@ class _CatalogTab extends StatelessWidget {
                   ),
                   Switch(
                     value: c.isActive,
-                    activeColor: kPrimary,
+                    activeThumbColor: kPrimary,
                     onChanged: (_) => onToggleActive(c),
                   ),
                 ],
@@ -2386,17 +2387,19 @@ class _AddStockSheetState extends State<_AddStockSheet> {
       );
       if (mounted) Navigator.of(context).pop(true);
     } on InventoryException catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _saving = false;
           _error = e.message;
         });
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _saving = false;
           _error = e.toString();
         });
+      }
     }
   }
 
@@ -2409,7 +2412,7 @@ class _AddStockSheetState extends State<_AddStockSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           DropdownButtonFormField<String>(
-            value: _branchId,
+            initialValue: _branchId,
             decoration: fieldDecoration('Branch'),
             items: widget.branches
                 .map((b) => DropdownMenuItem(value: b.id, child: Text(b.name)))
@@ -2420,7 +2423,7 @@ class _AddStockSheetState extends State<_AddStockSheet> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            value: _itemId,
+            initialValue: _itemId,
             decoration: fieldDecoration('Item'),
             items: widget.items
                 .map(
@@ -2888,9 +2891,10 @@ class _ItemFormSheetState extends State<_ItemFormSheet> {
           requiresPrescription: _rx,
         );
       }
-      if (mounted)
+      if (mounted) {
         Navigator.of(context)
             .pop(widget.item == null ? 'Item added.' : 'Item updated.');
+      }
     } on InventoryException catch (e) {
       if (mounted) {
         setState(() {
@@ -2960,7 +2964,7 @@ class _ItemFormSheetState extends State<_ItemFormSheet> {
               'Requires prescription',
               style: sans(13.5, color: kInk),
             ),
-            activeColor: kPrimary,
+            activeThumbColor: kPrimary,
             contentPadding: EdgeInsets.zero,
           ),
           if (_formError != null) ...[

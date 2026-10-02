@@ -175,7 +175,7 @@ class StockAccessRepository {
       await _client.rpc('decide_stock_access', params: {
         'p_request_id': requestId,
         'p_approve': approve,
-        if (hours != null) 'p_hours': hours,
+        'p_hours': ?hours,
       });
     } on PostgrestException catch (e) {
       throw StockAccessException(e.message);

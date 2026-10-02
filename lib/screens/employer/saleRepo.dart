@@ -191,9 +191,9 @@ class SaleRepository {
         'p_lines': lines,
         'p_sale_type': saleType,
         'p_payment_method': method,
-        if (customerId != null) 'p_customer_id': customerId,
+        'p_customer_id': ?customerId,
         if (partPayment != null && partPayment > 0) 'p_amount_paid': partPayment,
-        if (partMethod != null) 'p_paid_method': partMethod,
+        'p_paid_method': ?partMethod,
       });
       return Map<String, dynamic>.from(res as Map);
     } on PostgrestException catch (e) {

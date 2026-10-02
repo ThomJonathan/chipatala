@@ -234,7 +234,7 @@ class CashierStockRepository {
     try {
       await _client.rpc('receive_stock_delivery', params: {
         'p_branch_id': branchId,
-        if (supplierId != null) 'p_supplier_id': supplierId,
+        'p_supplier_id': ?supplierId,
         if (invoice != null && invoice.trim().isNotEmpty) 'p_invoice_number': invoice.trim(),
         'p_lines': [for (final l in lines) l.toJson()],
       });

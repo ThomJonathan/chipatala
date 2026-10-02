@@ -33,7 +33,7 @@ class AppIcon extends StatelessWidget {
         color: AppPalette.primary,
         boxShadow: [
           BoxShadow(
-            color: AppPalette.primary.withOpacity(0.4),
+            color: AppPalette.primary.withValues(alpha: 0.4),
             blurRadius: size * 0.3,
             offset: Offset(0, size * 0.12),
           ),
@@ -232,7 +232,7 @@ class PrimaryButton extends StatelessWidget {
         style: ElevatedButton.styleFrom(
           backgroundColor: AppPalette.primary,
           foregroundColor: Colors.white,
-          disabledBackgroundColor: AppPalette.primary.withOpacity(0.6),
+          disabledBackgroundColor: AppPalette.primary.withValues(alpha: 0.6),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           elevation: 0,
         ),
@@ -294,9 +294,9 @@ class ErrorBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
-        color: AppPalette.error.withOpacity(0.08),
+        color: AppPalette.error.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppPalette.error.withOpacity(0.25)),
+        border: Border.all(color: AppPalette.error.withValues(alpha: 0.25)),
       ),
       child: Text(
         message,

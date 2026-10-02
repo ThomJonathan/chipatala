@@ -144,17 +144,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
     if (result == null || result.length != 2) return;
     if (result[0] != result[1]) {
-      if (mounted)
+      if (mounted) {
         empToast(context, 'The two passwords don’t match.', error: true);
+      }
       return;
     }
     if (result[0].length < 6) {
-      if (mounted)
+      if (mounted) {
         empToast(
           context,
           'Password is too short — use at least 6 characters.',
           error: true,
         );
+      }
       return;
     }
     try {
@@ -223,8 +225,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (ok != true) return;
     }
     await Supabase.instance.client.auth.signOut();
-    if (mounted)
+    if (mounted) {
       Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    }
   }
 
   Future<void> _testPrint() async {
@@ -528,7 +531,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               'After each sale, without asking.',
               style: empSans(12, color: empMuted),
             ),
-            activeColor: empPrimary,
+            activeThumbColor: empPrimary,
             contentPadding: EdgeInsets.zero,
           ),
           SizedBox(

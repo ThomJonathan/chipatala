@@ -215,8 +215,9 @@ class EmployeeReportsRepository {
     required double amount,
     required String method,
   }) async {
-    if (amount <= 0)
+    if (amount <= 0) {
       throw const EmployeeReportException('Enter an amount above zero.');
+    }
     try {
       await _client.from('payments').insert({
         'branch_id': branchId,

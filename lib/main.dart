@@ -46,7 +46,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: appThemeMode,
-      builder: (_, mode, __) => MaterialApp(
+      builder: (_, mode, _) => MaterialApp(
         title: 'Tumaini Investments',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(

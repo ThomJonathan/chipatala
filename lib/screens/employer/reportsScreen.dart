@@ -44,17 +44,19 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
     });
     try {
       final value = await _repo.fetch(branchId: _branchId, period: _period);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _data = value;
           _loading = false;
         });
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _error = e.toString();
           _loading = false;
         });
+      }
     }
   }
 
@@ -239,8 +241,9 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
   );
   Widget _sales(EmployeeReportData d) {
     final points = <FlSpot>[];
-    for (var i = 0; i < d.sales.length; i++)
+    for (var i = 0; i < d.sales.length; i++) {
       points.add(FlSpot(i.toDouble(), d.sales[d.sales.length - i - 1].total));
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

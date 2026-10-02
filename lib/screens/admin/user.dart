@@ -229,7 +229,7 @@ class _UsersScreenState extends State<UsersScreen> {
                           const SizedBox(height: 16),
                           ValueListenableBuilder<int>(
                             valueListenable: stockAccessPendingCount,
-                            builder: (_, accessPending, __) => SingleChildScrollView(
+                            builder: (_, accessPending, _) => SingleChildScrollView(
                               scrollDirection: Axis.horizontal,
                               child: Row(
                                 children: [

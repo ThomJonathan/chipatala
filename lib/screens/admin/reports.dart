@@ -1131,8 +1131,9 @@ class _TrendChart extends StatelessWidget {
                 interval: interval,
                 getTitlesWidget: (v, _) {
                   final i = v.round();
-                  if (i < 0 || i >= points.length)
+                  if (i < 0 || i >= points.length) {
                     return const SizedBox.shrink();
+                  }
                   return Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Text(
@@ -1213,8 +1214,9 @@ class _BranchBars extends StatelessWidget {
                   reservedSize: 36,
                   getTitlesWidget: (v, _) {
                     final i = v.round();
-                    if (i < 0 || i >= shown.length)
+                    if (i < 0 || i >= shown.length) {
                       return const SizedBox.shrink();
+                    }
                     final name = shown[i].branchName.split(' ').first;
                     return Padding(
                       padding: const EdgeInsets.only(top: 6),
@@ -1270,7 +1272,7 @@ class _SalesTab extends StatelessWidget {
     final branchSales = aggregateBranchSales(bundle.sales);
     final trend = buildTrend(bundle.sales, period);
     final hasTrend = trend.any((p) => p.value > 0);
-    final chartCard = (String title, Widget child) => Container(
+    Container chartCard(String title, Widget child) => Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,

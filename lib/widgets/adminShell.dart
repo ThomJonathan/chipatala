@@ -365,7 +365,7 @@ class _SideNav extends StatelessWidget {
                         if (isUsers)
                           ValueListenableBuilder<int>(
                             valueListenable: stockAccessPendingCount,
-                            builder: (_, pending, __) {
+                            builder: (_, pending, _) {
                               if (pending <= 0) return const SizedBox.shrink();
                               return Row(
                                 children: [
