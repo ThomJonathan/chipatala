@@ -1,4 +1,4 @@
-name: chipatala
+name: tumaini_investments
 description: "A Pharmacy management system"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -23,6 +23,11 @@ dependencies:
   printing: ^5.15.1
   intl: ^0.20.3
   shared_preferences: ^2.5.5
+  http: ^1.6.0
+  crypto: ^3.0.7
+  package_info_plus: ^10.2.2
+  path_provider: ^2.1.6
+  ota_update: ^7.1.0
 
 dev_dependencies:
   flutter_test:

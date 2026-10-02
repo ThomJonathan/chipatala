@@ -3,53 +3,128 @@ name: Tumaini Investments
 on:
   workflow_dispatch:
   push:
-    branches:
-      - master
+    tags: ["v*"]
+
+permissions:
+  contents: write
 
 jobs:
   build-windows:
     runs-on: windows-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
-      - name: Enable Windows desktop
-        run: flutter config --enable-windows-desktop
+      - name: Set version
+        shell: pwsh
+        run: |
+          $v = if ("${{ github.ref_type }}" -eq "tag") { "${{ github.ref_name }}".TrimStart("v") } else { "0.0.0" }
+          "VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Get dependencies
-        run: flutter pub get
+      - run: flutter pub get
 
       - name: Create dart_define.json
         shell: pwsh
         env:
           DART_DEFINE_JSON: ${{ secrets.DART_DEFINE_JSON }}
-        run: |
-          [System.IO.File]::WriteAllText(
-            "dart_define.json",
-            $env:DART_DEFINE_JSON
-          )
+        run: '[System.IO.File]::WriteAllText("dart_define.json", $env:DART_DEFINE_JSON)'
 
-      - name: Build Windows application
-        run: flutter build windows --release --dart-define-from-file=dart_define.json
-
-      - name: Install Inno Setup
-        shell: powershell
-        run: |
-          choco install innosetup -y
+      - name: Build Windows
+        shell: pwsh
+        run: flutter build windows --release --dart-define-from-file=dart_define.json --build-name=$env:VERSION --build-number=${{ github.run_number }}
 
       - name: Create installer
-        shell: powershell
-        run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer.iss"
+        shell: pwsh
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$env:VERSION" installer.iss'
 
-      - name: Upload installer
-        uses: actions/upload-artifact@v4
+      # --- insert the "Sign installer" step here once you have a certificate ---
+
+      - name: Write update manifest
+        shell: pwsh
+        run: |
+          $exe = "installer-output/Tumaini-Investments-Setup.exe"
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          $url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Tumaini-Investments-Setup.exe"
+          @{ version = $env:VERSION; url = $url; sha256 = $hash } | ConvertTo-Json | Out-File installer-output/version-windows.json -Encoding utf8
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: Tumaini-Investments-Installer
-          path: installer-output/Tumaini-Investments-Setup.exe
+          name: windows
+          path: |
+            installer-output/Tumaini-Investments-Setup.exe
+            installer-output/version-windows.json
+
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Set version
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then V="${{ github.ref_name }}"; echo "VERSION=${V#v}" >> $GITHUB_ENV; else echo "VERSION=0.0.0" >> $GITHUB_ENV; fi
+
+      - run: flutter pub get
+
+      - name: Create dart_define.json
+        env:
+          DART_DEFINE_JSON: ${{ secrets.DART_DEFINE_JSON }}
+        run: printf '%s' "$DART_DEFINE_JSON" > dart_define.json
+
+      - name: Restore signing key
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          echo "$KS_B64" | base64 -d > android/app/release.jks
+          cat > android/key.properties <<EOF
+          storePassword=$KS_PASS
+          keyPassword=$KEY_PASS
+          keyAlias=$KEY_ALIAS
+          storeFile=release.jks
+          EOF
+
+      - name: Build APK
+        run: flutter build apk --release --dart-define-from-file=dart_define.json --build-name=$VERSION --build-number=${{ github.run_number }}
+
+      - name: Write update manifest
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk Tumaini-Investments.apk
+          SHA=$(sha256sum Tumaini-Investments.apk | cut -d' ' -f1)
+          echo "{\"version\":\"$VERSION\",\"url\":\"https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Tumaini-Investments.apk\",\"sha256\":\"$SHA\"}" > version-android.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: |
+            Tumaini-Investments.apk
+            version-android.json
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: [build-windows, build-android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

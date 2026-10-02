@@ -1,15 +1,19 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import './appPrefs.dart';
 import './core/env.dart';
+import './services/updater.dart';
 import './screens/admin/home.dart';
 import './screens/employer/home.dart';
 import './screens/forgotPassword.dart';
 import './screens/login.dart';
 import './screens/signup.dart';
 import './screens/splashScreen.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -21,26 +25,65 @@ Future<void> main() async {
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      systemNavigationBarColor: Colors.transparent, // <-- Ensure this is transparent
+      systemNavigationBarColor:
+          Colors.transparent, // <-- Ensure this is transparent
       systemNavigationBarContrastEnforced: false,
       statusBarIconBrightness: Brightness.dark,
       systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
 
-
-  await Supabase.initialize(
-    url: Env.supabaseUrl,
-    anonKey: Env.supabaseAnonKey,
-  );
+  await Supabase.initialize(url: Env.supabaseUrl, anonKey: Env.supabaseAnonKey);
 
   await EmpPrefs.applySavedAppearance();
 
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdate());
+  }
+
+  Future<void> _checkForUpdate() async {
+    if (!(Platform.isWindows || Platform.isAndroid)) return;
+
+    try {
+      final update = await Updater.check();
+      if (update == null || !mounted) return;
+
+      final install = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Update available'),
+          content: Text('Version ${update['version']} is ready to install.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Later'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Update now'),
+            ),
+          ],
+        ),
+      );
+
+      if (install == true) await Updater.install(update);
+    } catch (_) {
+      // Updates are optional and may be unavailable while offline.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
