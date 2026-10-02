@@ -467,7 +467,7 @@ class EmployeeHomeRepository {
       'customer_id': customerId,
       'amount': amount,
       'payment_method': method,
-      if (uid != null) 'recorded_by': uid,
+      'recorded_by': ?uid,
     });
   }
 }

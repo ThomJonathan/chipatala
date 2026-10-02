@@ -142,7 +142,7 @@ class _AssignUserSheetState extends State<AssignUserSheet> {
               const SizedBox(height: 16),
             ] else ...[
               DropdownButtonFormField<String>(
-                value: _userId,
+                initialValue: _userId,
                 isExpanded: true,
                 decoration: fieldDecoration('User'),
                 style: sans(14, color: kInk),
@@ -165,7 +165,7 @@ class _AssignUserSheetState extends State<AssignUserSheet> {
             ],
             if (fixedBranch == null && !_isAdminRole) ...[
               DropdownButtonFormField<String>(
-                value: _branchId,
+                initialValue: _branchId,
                 isExpanded: true,
                 decoration: fieldDecoration('Branch'),
                 style: sans(14, color: kInk),

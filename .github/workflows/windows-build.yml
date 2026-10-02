@@ -1,0 +1,55 @@
+name: Tumaini Investments
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Create dart_define.json
+        shell: pwsh
+        env:
+          DART_DEFINE_JSON: ${{ secrets.DART_DEFINE_JSON }}
+        run: |
+          [System.IO.File]::WriteAllText(
+            "dart_define.json",
+            $env:DART_DEFINE_JSON
+          )
+
+      - name: Build Windows application
+        run: flutter build windows --release --dart-define-from-file=dart_define.json
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: |
+          choco install innosetup -y
+
+      - name: Create installer
+        shell: powershell
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer.iss"
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tumaini-Investments-Installer
+          path: installer-output/Tumaini-Investments-Setup.exe

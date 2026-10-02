@@ -338,8 +338,9 @@ class InventoryRepository {
     var expired = 0;
     for (final item in items) {
       value += item.stockValue;
-      if (item.status == StockStatus.low || item.status == StockStatus.out)
+      if (item.status == StockStatus.low || item.status == StockStatus.out) {
         low++;
+      }
       for (final b in item.batches) {
         final d = b.daysToExpiry;
         if (d == null) continue;
@@ -514,10 +515,12 @@ class InventoryRepository {
     required double deltaQty,
     required String reason,
   }) async {
-    if (deltaQty == 0)
+    if (deltaQty == 0) {
       throw const InventoryException('Quantity can\'t be zero.');
-    if (reason.trim().isEmpty)
+    }
+    if (reason.trim().isEmpty) {
       throw const InventoryException('A reason is required.');
+    }
 
     final current = await _client
         .from('inventory')
@@ -547,7 +550,7 @@ class InventoryRepository {
         'movement_type': type,
         'quantity': deltaQty.abs(),
         'notes': reason.trim(),
-        if (uid != null) 'performed_by': uid,
+        'performed_by': ?uid,
       });
     } catch (_) {
       // Stock was already updated — the movement log write failing must not
@@ -569,9 +572,9 @@ class InventoryRepository {
     double? wholesalePrice,
   }) async {
     final patch = <String, dynamic>{
-      if (buyingPrice != null) 'buying_price': buyingPrice,
-      if (retailPrice != null) 'retail_price': retailPrice,
-      if (wholesalePrice != null) 'wholesale_price': wholesalePrice,
+      'buying_price': ?buyingPrice,
+      'retail_price': ?retailPrice,
+      'wholesale_price': ?wholesalePrice,
     };
     if (patch.isEmpty) throw const InventoryException('Nothing to update.');
     await _client.from('inventory').update(patch).eq('id', inventoryId);
@@ -587,8 +590,9 @@ class InventoryRepository {
     String? batchNumber,
     DateTime? expiryDate,
   }) async {
-    if (quantity <= 0)
+    if (quantity <= 0) {
       throw const InventoryException('Quantity must be above zero.');
+    }
     if (buyingPrice < 0 || retailPrice < 0 || (wholesalePrice ?? 0) < 0) {
       throw const InventoryException('Prices cannot be negative.');
     }
@@ -636,8 +640,9 @@ class InventoryRepository {
     required double reorderLevel,
     required bool requiresPrescription,
   }) async {
-    if (name.trim().isEmpty)
+    if (name.trim().isEmpty) {
       throw const InventoryException('Item name is required.');
+    }
     await _client.from('items').insert({
       'name': name.trim(),
       'category': category.trim().isEmpty ? null : category.trim(),
@@ -655,8 +660,9 @@ class InventoryRepository {
     required double reorderLevel,
     required bool requiresPrescription,
   }) async {
-    if (name.trim().isEmpty)
+    if (name.trim().isEmpty) {
       throw const InventoryException('Item name is required.');
+    }
     await _client
         .from('items')
         .update({

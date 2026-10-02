@@ -149,7 +149,7 @@ class _AppIcon extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: AppPalette.primary.withOpacity(0.45),
+            color: AppPalette.primary.withValues(alpha: 0.45),
             blurRadius: 24,
             offset: const Offset(0, 10),
           ),
