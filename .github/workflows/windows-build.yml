@@ -38,8 +38,18 @@ jobs:
       - name: Build Windows application
         run: flutter build windows --release --dart-define-from-file=dart_define.json
 
-      - name: Upload Windows build
+      - name: Install Inno Setup
+        shell: powershell
+        run: |
+          choco install innosetup -y
+
+      - name: Create installer
+        shell: powershell
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "installer.iss"
+
+      - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: chipatala-windows
-          path: build/windows/x64/runner/Release/
+          name: Tumaini-Investments-Installer
+          path: installer-output/Tumaini-Investments-Setup.exe
