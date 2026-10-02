@@ -47,7 +47,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 //        )
 // ============================================================================
 
-const double _kDesktopBreakpoint = 760; // below this -> bottom nav, at/above -> side nav
+const double _kDesktopBreakpoint =
+    760; // below this -> bottom nav, at/above -> side nav
 const Color _kBorder = Color(0xFFD9E2F5);
 const Color _kInkMuted = Color(0xFF5B6B8C);
 const Color _kSidebarBg = Color(0xFFFFFFFF);
@@ -66,25 +67,54 @@ class _NavDestination {
 // Home, Sale, Stock, Reports, Settings — in this order. Whatever you pass
 // into EmployeeShell.pages must be in this same order.
 const List<_NavDestination> _kDestinations = [
-  _NavDestination(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home'),
-  _NavDestination(icon: Icons.point_of_sale_outlined, activeIcon: Icons.point_of_sale, label: 'Sale'),
-  _NavDestination(icon: Icons.inventory_2_outlined, activeIcon: Icons.inventory_2, label: 'Stock'),
-  _NavDestination(icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart, label: 'Reports'),
-  _NavDestination(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings'),
+  _NavDestination(
+    icon: Icons.home_outlined,
+    activeIcon: Icons.home,
+    label: 'Home',
+  ),
+  _NavDestination(
+    icon: Icons.point_of_sale_outlined,
+    activeIcon: Icons.point_of_sale,
+    label: 'Sale',
+  ),
+  _NavDestination(
+    icon: Icons.inventory_2_outlined,
+    activeIcon: Icons.inventory_2,
+    label: 'Stock',
+  ),
+  _NavDestination(
+    icon: Icons.bar_chart_outlined,
+    activeIcon: Icons.bar_chart,
+    label: 'Reports',
+  ),
+  _NavDestination(
+    icon: Icons.settings_outlined,
+    activeIcon: Icons.settings,
+    label: 'Settings',
+  ),
 ];
 
 /// Confirms with the user, then signs out. If [onSignOut] is given, that
 /// runs instead of the default (use this if sign-out needs to go through
 /// your own AuthRepository rather than straight to Supabase).
-Future<void> _confirmAndSignOut(BuildContext context, VoidCallback? onSignOut) async {
+Future<void> _confirmAndSignOut(
+  BuildContext context,
+  VoidCallback? onSignOut,
+) async {
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('Sign out?'),
       content: const Text('You will need to sign in again to continue.'),
       actions: [
-        TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-        TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Sign out')),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Sign out'),
+        ),
       ],
     ),
   );
@@ -138,13 +168,14 @@ class EmployeeShell extends StatefulWidget {
     this.branchName = '',
     this.onSignOut,
   }) : assert(
-  pages.length == _kDestinations.length,
-  'EmployeeShell.pages must have exactly ${_kDestinations.length} entries '
-      '(Home, Sale, Stock, Reports, Settings) — got ${pages.length}.',
-  );
+         pages.length == _kDestinations.length,
+         'EmployeeShell.pages must have exactly ${_kDestinations.length} entries '
+         '(Home, Sale, Stock, Reports, Settings) — got ${pages.length}.',
+       );
 
   static void switchTo(BuildContext context, int index) {
-    final scope = context.findAncestorWidgetOfExactType<EmployeeShellScope>() ??
+    final scope =
+        context.findAncestorWidgetOfExactType<EmployeeShellScope>() ??
         context.dependOnInheritedWidgetOfExactType<EmployeeShellScope>();
     if (scope != null) {
       scope.selectTab(index);
@@ -181,7 +212,11 @@ class _EmployeeShellState extends State<EmployeeShell> {
                     branchName: widget.branchName,
                     onSignOut: widget.onSignOut,
                   ),
-                  const VerticalDivider(width: 1, thickness: 1, color: _kBorder),
+                  const VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: _kBorder,
+                  ),
                   Expanded(
                     child: IndexedStack(index: _index, children: widget.pages),
                   ),
@@ -201,7 +236,9 @@ class _EmployeeShellState extends State<EmployeeShell> {
                     branchName: widget.branchName,
                     onSignOut: widget.onSignOut,
                   ),
-                  Expanded(child: IndexedStack(index: _index, children: widget.pages)),
+                  Expanded(
+                    child: IndexedStack(index: _index, children: widget.pages),
+                  ),
                 ],
               ),
             ),
@@ -254,7 +291,11 @@ class _BottomNav extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(active ? d.activeIcon : d.icon, size: 20, color: color),
+                      Icon(
+                        active ? d.activeIcon : d.icon,
+                        size: 20,
+                        color: color,
+                      ),
                       const SizedBox(height: 3),
                       Text(
                         d.label,
@@ -297,8 +338,13 @@ class _MobileTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    final initial = userName.trim().isNotEmpty ? userName.trim()[0].toUpperCase() : '?';
-    final roleLine = [userRole, branchName].where((s) => s.trim().isNotEmpty).join(' · ');
+    final initial = userName.trim().isNotEmpty
+        ? userName.trim()[0].toUpperCase()
+        : '?';
+    final roleLine = [
+      userRole,
+      branchName,
+    ].where((s) => s.trim().isNotEmpty).join(' · ');
 
     return Container(
       decoration: const BoxDecoration(
@@ -313,7 +359,11 @@ class _MobileTopBar extends StatelessWidget {
             backgroundColor: primary,
             child: Text(
               initial,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -324,13 +374,19 @@ class _MobileTopBar extends StatelessWidget {
               children: [
                 Text(
                   userName.trim().isNotEmpty ? userName : 'Signed in',
-                  style: GoogleFonts.ibmPlexSans(fontSize: 13.5, fontWeight: FontWeight.w600),
+                  style: GoogleFonts.ibmPlexSans(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
                 if (roleLine.isNotEmpty)
                   Text(
                     roleLine,
-                    style: GoogleFonts.ibmPlexSans(fontSize: 11.5, color: _kInkMuted),
+                    style: GoogleFonts.ibmPlexSans(
+                      fontSize: 11.5,
+                      color: _kInkMuted,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
               ],
@@ -372,8 +428,13 @@ class _SideNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    final initial = userName.trim().isNotEmpty ? userName.trim()[0].toUpperCase() : '?';
-    final roleLine = [userRole, branchName].where((s) => s.trim().isNotEmpty).join(' · ');
+    final initial = userName.trim().isNotEmpty
+        ? userName.trim()[0].toUpperCase()
+        : '?';
+    final roleLine = [
+      userRole,
+      branchName,
+    ].where((s) => s.trim().isNotEmpty).join(' · ');
 
     return Container(
       width: 220,
@@ -405,7 +466,10 @@ class _SideNav extends StatelessWidget {
                   borderRadius: BorderRadius.circular(7),
                   onTap: () => onSelect(i),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 9,
+                    ),
                     child: Row(
                       children: [
                         Icon(
@@ -418,7 +482,9 @@ class _SideNav extends StatelessWidget {
                           d.label,
                           style: GoogleFonts.ibmPlexSans(
                             fontSize: 13.5,
-                            fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                            fontWeight: active
+                                ? FontWeight.w600
+                                : FontWeight.w500,
                             color: active ? Colors.white : _kInkMuted,
                           ),
                         ),
@@ -464,17 +530,39 @@ class _SideNav extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              userName.trim().isNotEmpty ? userName : 'Signed in',
-                              style: GoogleFonts.ibmPlexSans(fontSize: 13, fontWeight: FontWeight.w600),
+                              userName.trim().isNotEmpty
+                                  ? userName
+                                  : 'Signed in',
+                              style: GoogleFonts.ibmPlexSans(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
                               overflow: TextOverflow.ellipsis,
                             ),
                             if (roleLine.isNotEmpty)
                               Text(
                                 roleLine,
-                                style: GoogleFonts.ibmPlexSans(fontSize: 11, color: _kInkMuted),
+                                style: GoogleFonts.ibmPlexSans(
+                                  fontSize: 11,
+                                  color: _kInkMuted,
+                                ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                           ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.logout,
+                          size: 18,
+                          color: _kInkMuted,
+                        ),
+                        onPressed: () => _confirmAndSignOut(context, onSignOut),
+                        tooltip: 'Sign out',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
                         ),
                       ),
                     ],

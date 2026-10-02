@@ -28,7 +28,10 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
+
   flutter_lints: ^6.0.0
+
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
 
@@ -36,5 +39,15 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/jaytech_logo.png
+    - assets/images/appicon.jpeg
 
 
+
+
+flutter_launcher_icons:
+      android: true
+      ios: true
+      image_path: "assets/images/appicon.png"
+      adaptive_icon_background: "#FFFFFF"
+      adaptive_icon_foreground: "assets/images/appicon_foreground.png"
+      remove_alpha_ios: true

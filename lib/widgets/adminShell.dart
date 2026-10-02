@@ -33,12 +33,42 @@ class _NavDestination {
 
 // Desktop destinations: Home, Inventory, Branches, Users, Reports, Settings.
 const List<_NavDestination> _kDestinations = [
-  _NavDestination(icon: Icons.home_outlined, activeIcon: Icons.home, label: 'Home', pageIndex: 0),
-  _NavDestination(icon: Icons.inventory_outlined, activeIcon: Icons.inventory, label: 'Inventory', pageIndex: 1),
-  _NavDestination(icon: Icons.storefront_outlined, activeIcon: Icons.storefront, label: 'Branches', pageIndex: 2),
-  _NavDestination(icon: Icons.people_outline, activeIcon: Icons.people, label: 'Users', pageIndex: 3),
-  _NavDestination(icon: Icons.bar_chart_outlined, activeIcon: Icons.bar_chart, label: 'Reports', pageIndex: 4),
-  _NavDestination(icon: Icons.settings_outlined, activeIcon: Icons.settings, label: 'Settings', pageIndex: 5),
+  _NavDestination(
+    icon: Icons.home_outlined,
+    activeIcon: Icons.home,
+    label: 'Home',
+    pageIndex: 0,
+  ),
+  _NavDestination(
+    icon: Icons.inventory_outlined,
+    activeIcon: Icons.inventory,
+    label: 'Inventory',
+    pageIndex: 1,
+  ),
+  _NavDestination(
+    icon: Icons.storefront_outlined,
+    activeIcon: Icons.storefront,
+    label: 'Branches',
+    pageIndex: 2,
+  ),
+  _NavDestination(
+    icon: Icons.people_outline,
+    activeIcon: Icons.people,
+    label: 'Users',
+    pageIndex: 3,
+  ),
+  _NavDestination(
+    icon: Icons.bar_chart_outlined,
+    activeIcon: Icons.bar_chart,
+    label: 'Reports',
+    pageIndex: 4,
+  ),
+  _NavDestination(
+    icon: Icons.settings_outlined,
+    activeIcon: Icons.settings,
+    label: 'Settings',
+    pageIndex: 5,
+  ),
 ];
 
 class AdminShellScope extends InheritedWidget {
@@ -60,15 +90,24 @@ class AdminShellScope extends InheritedWidget {
       selectedIndex != oldWidget.selectedIndex;
 }
 
-Future<void> _confirmAndSignOut(BuildContext context, VoidCallback? onSignOut) async {
+Future<void> _confirmAndSignOut(
+  BuildContext context,
+  VoidCallback? onSignOut,
+) async {
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('Sign out?'),
       content: const Text('You will need to sign in again to continue.'),
       actions: [
-        TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
-        TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Sign out')),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: const Text('Sign out'),
+        ),
       ],
     ),
   );
@@ -99,13 +138,14 @@ class AdminShell extends StatefulWidget {
     this.userName = '',
     this.onSignOut,
   }) : assert(
-  pages.length == _kDestinations.length,
-  'AdminShell.pages must have exactly ${_kDestinations.length} entries '
-      '(Home, Inventory, Branches, Users, Reports, Settings) — got ${pages.length}.',
-  );
+         pages.length == _kDestinations.length,
+         'AdminShell.pages must have exactly ${_kDestinations.length} entries '
+         '(Home, Inventory, Branches, Users, Reports, Settings) — got ${pages.length}.',
+       );
 
   static void switchTo(BuildContext context, int index) {
-    final scope = context.findAncestorWidgetOfExactType<AdminShellScope>() ??
+    final scope =
+        context.findAncestorWidgetOfExactType<AdminShellScope>() ??
         context.dependOnInheritedWidgetOfExactType<AdminShellScope>();
     if (scope != null) {
       scope.selectTab(index);
@@ -140,7 +180,11 @@ class _AdminShellState extends State<AdminShell> {
                     userName: widget.userName,
                     onSignOut: widget.onSignOut,
                   ),
-                  const VerticalDivider(width: 1, thickness: 1, color: _kBorder),
+                  const VerticalDivider(
+                    width: 1,
+                    thickness: 1,
+                    color: _kBorder,
+                  ),
                   Expanded(
                     child: IndexedStack(index: _index, children: widget.pages),
                   ),
@@ -154,8 +198,13 @@ class _AdminShellState extends State<AdminShell> {
               bottom: false,
               child: Column(
                 children: [
-                  _MobileTopBar(userName: widget.userName, onSignOut: widget.onSignOut),
-                  Expanded(child: IndexedStack(index: _index, children: widget.pages)),
+                  _MobileTopBar(
+                    userName: widget.userName,
+                    onSignOut: widget.onSignOut,
+                  ),
+                  Expanded(
+                    child: IndexedStack(index: _index, children: widget.pages),
+                  ),
                 ],
               ),
             ),
@@ -202,38 +251,49 @@ class _BottomNav extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: _kDestinations.where((d) => d.pageIndex != 2 && d.pageIndex != 3).map((d) {
-            // Users and Branches are opened from Settings on mobile.
-            final active = d.pageIndex == selectedIndex ||
-                (d.pageIndex == 5 && (selectedIndex == 2 || selectedIndex == 3));
-            final color = active ? primary : _kInkMuted;
-            return Expanded(
-              child: InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: () => onSelect(d.pageIndex),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(active ? d.activeIcon : d.icon, size: 20, color: color),
-                      const SizedBox(height: 2),
-                      Text(
-                        d.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: GoogleFonts.ibmPlexSans(
-                          fontSize: 10,
-                          fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-                          color: color,
-                        ),
+          children: _kDestinations
+              .where((d) => d.pageIndex != 2 && d.pageIndex != 3)
+              .map((d) {
+                // Users and Branches are opened from Settings on mobile.
+                final active =
+                    d.pageIndex == selectedIndex ||
+                    (d.pageIndex == 5 &&
+                        (selectedIndex == 2 || selectedIndex == 3));
+                final color = active ? primary : _kInkMuted;
+                return Expanded(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () => onSelect(d.pageIndex),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            active ? d.activeIcon : d.icon,
+                            size: 20,
+                            color: color,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            d.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.ibmPlexSans(
+                              fontSize: 10,
+                              fontWeight: active
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                              color: color,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-            );
-          }).toList(),
+                );
+              })
+              .toList(),
         ),
       ),
     );
@@ -253,7 +313,9 @@ class _MobileTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    final initial = userName.trim().isNotEmpty ? userName.trim()[0].toUpperCase() : '?';
+    final initial = userName.trim().isNotEmpty
+        ? userName.trim()[0].toUpperCase()
+        : '?';
 
     return Container(
       decoration: const BoxDecoration(
@@ -268,7 +330,11 @@ class _MobileTopBar extends StatelessWidget {
             backgroundColor: primary,
             child: Text(
               initial,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -279,12 +345,18 @@ class _MobileTopBar extends StatelessWidget {
               children: [
                 Text(
                   userName.trim().isNotEmpty ? userName : 'Signed in',
-                  style: GoogleFonts.ibmPlexSans(fontSize: 13.5, fontWeight: FontWeight.w600),
+                  style: GoogleFonts.ibmPlexSans(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
                   'Admin',
-                  style: GoogleFonts.ibmPlexSans(fontSize: 11.5, color: _kInkMuted),
+                  style: GoogleFonts.ibmPlexSans(
+                    fontSize: 11.5,
+                    color: _kInkMuted,
+                  ),
                 ),
               ],
             ),
@@ -321,7 +393,9 @@ class _SideNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    final initial = userName.trim().isNotEmpty ? userName.trim()[0].toUpperCase() : '?';
+    final initial = userName.trim().isNotEmpty
+        ? userName.trim()[0].toUpperCase()
+        : '?';
 
     return Container(
       width: 220,
@@ -334,7 +408,11 @@ class _SideNav extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(10, 0, 10, 24),
             child: Text(
               'TUMAINI INVESTMENTS',
-              style: GoogleFonts.ibmPlexSans(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+              style: GoogleFonts.ibmPlexSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.3,
+              ),
             ),
           ),
           ..._kDestinations.map((d) {
@@ -349,16 +427,25 @@ class _SideNav extends StatelessWidget {
                   borderRadius: BorderRadius.circular(7),
                   onTap: () => onSelect(d.pageIndex),
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 9,
+                    ),
                     child: Row(
                       children: [
-                        Icon(active ? d.activeIcon : d.icon, size: 17, color: active ? Colors.white : _kInkMuted),
+                        Icon(
+                          active ? d.activeIcon : d.icon,
+                          size: 17,
+                          color: active ? Colors.white : _kInkMuted,
+                        ),
                         const SizedBox(width: 10),
                         Text(
                           d.label,
                           style: GoogleFonts.ibmPlexSans(
                             fontSize: 13.5,
-                            fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                            fontWeight: active
+                                ? FontWeight.w600
+                                : FontWeight.w500,
                             color: active ? Colors.white : _kInkMuted,
                           ),
                         ),
@@ -371,9 +458,14 @@ class _SideNav extends StatelessWidget {
                                 children: [
                                   const SizedBox(width: 8),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 7,
+                                      vertical: 2,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: active ? Colors.white : const Color(0xFFB4544A),
+                                      color: active
+                                          ? Colors.white
+                                          : const Color(0xFFB4544A),
                                       borderRadius: BorderRadius.circular(9),
                                     ),
                                     child: Text(
@@ -398,7 +490,9 @@ class _SideNav extends StatelessWidget {
           }),
           const Spacer(),
           Container(
-            decoration: const BoxDecoration(border: Border(top: BorderSide(color: _kBorder))),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: _kBorder)),
+            ),
             padding: const EdgeInsets.only(top: 10),
             child: Material(
               color: Colors.transparent,
@@ -415,7 +509,11 @@ class _SideNav extends StatelessWidget {
                         backgroundColor: primary,
                         child: Text(
                           initial,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -425,12 +523,37 @@ class _SideNav extends StatelessWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              userName.trim().isNotEmpty ? userName : 'Signed in',
-                              style: GoogleFonts.ibmPlexSans(fontSize: 13, fontWeight: FontWeight.w600),
+                              userName.trim().isNotEmpty
+                                  ? userName
+                                  : 'Signed in',
+                              style: GoogleFonts.ibmPlexSans(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
                               overflow: TextOverflow.ellipsis,
                             ),
-                            Text('Admin', style: GoogleFonts.ibmPlexSans(fontSize: 11, color: _kInkMuted)),
+                            Text(
+                              'Admin',
+                              style: GoogleFonts.ibmPlexSans(
+                                fontSize: 11,
+                                color: _kInkMuted,
+                              ),
+                            ),
                           ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(
+                          Icons.logout,
+                          size: 18,
+                          color: _kInkMuted,
+                        ),
+                        onPressed: () => _confirmAndSignOut(context, onSignOut),
+                        tooltip: 'Sign out',
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 32,
+                          minHeight: 32,
                         ),
                       ),
                     ],

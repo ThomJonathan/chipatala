@@ -914,11 +914,24 @@ class _InventoryScreenState extends State<InventoryScreen> {
       children: [
         Align(
           alignment: Alignment.centerRight,
-          child: FilledButton.icon(
-            onPressed: _loading ? null : _addStock,
-            style: primaryButtonStyle(height: 42),
-            icon: const Icon(Icons.add_box_outlined, size: 18),
-            label: const Text('Add stock'),
+          child: Wrap(
+            alignment: WrapAlignment.end,
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              FilledButton.icon(
+                onPressed: _loading ? null : _addStock,
+                style: primaryButtonStyle(height: 42),
+                icon: const Icon(Icons.add_box_outlined, size: 18),
+                label: const Text('Add stock'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _loading ? null : () => _addOrEditItem(),
+                style: outlineButtonStyle(height: 42),
+                icon: const Icon(Icons.playlist_add_outlined, size: 18),
+                label: const Text('Add catalog item'),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 14),

@@ -1,8 +1,9 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="chipatala"
-        android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+            android:label="Tumaini Investments"
+            android:icon="@mipmap/ic_launcher"
+            android:name="${applicationName}"
+            android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
