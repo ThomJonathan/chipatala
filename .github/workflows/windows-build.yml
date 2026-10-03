@@ -37,6 +37,13 @@ jobs:
         shell: pwsh
         run: flutter build windows --release --dart-define-from-file=dart_define.json --build-name=$env:VERSION --build-number=${{ github.run_number }}
 
+      # Safeguard: install Inno Setup only if the runner image doesn't already have it
+      - name: Ensure Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+
       - name: Create installer
         shell: pwsh
         run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$env:VERSION" installer.iss'
@@ -67,6 +74,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+          cache: gradle
 
       - uses: subosito/flutter-action@v2
         with:

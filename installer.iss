@@ -10,6 +10,7 @@ AppId={{8A7B5C4D-1234-4567-89AB-CDEF12345678}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+CloseApplications=yes
 
 DefaultDirName={autopf}\Tumaini Investments
 DefaultGroupName=Tumaini Investments

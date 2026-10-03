@@ -14,17 +14,18 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.tumaini.investments"
+    namespace = "com.example.chipatala"
     compileSdk = flutter.compileSdkVersion
     // ndkVersion = flutter.ndkVersion  // disabled: not needed, was causing build failures
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true   // required by ota_update
     }
 
     defaultConfig {
-        applicationId = "com.tumaini.investments"
+        applicationId = "com.example.chipatala"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -42,15 +43,19 @@ android {
 
     buildTypes {
         release {
-            // Fail loudly on CI when release signing isn't configured, so a
-            // broken secret can't silently produce a debug-signed APK.
-            signingConfig = if (keystorePropertiesFile.exists())
-                signingConfigs.getByName("release")
-            else if (System.getenv("CI") == "true")
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            } else if (System.getenv("CI") == "true") {
                 throw GradleException("key.properties missing: release signing is not configured")
-            else signingConfigs.getByName("debug")
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
+}
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
 
 kotlin {
