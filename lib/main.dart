@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import './appPrefs.dart';
 import './core/env.dart';
 import './services/updater.dart';
 import './screens/admin/home.dart';
@@ -33,9 +32,11 @@ Future<void> main() async {
     ),
   );
 
-  await Supabase.initialize(url: Env.supabaseUrl, anonKey: Env.supabaseAnonKey);
-
-  await EmpPrefs.applySavedAppearance();
+  await Supabase.initialize(
+    url: 'https://flmrrpcmkqxazsrsutpx.supabase.co',
+    anonKey:
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZsbXJycGNta3F4YXpzcnN1dHB4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0NzQ3NDMsImV4cCI6MjEwNjA1MDc0M30.FARwV80c8UQ9XvpOfEMlPjVizKlkl9MT2e4fMpt6q7E',
+  );
 
   runApp(const MyApp());
 }
@@ -87,38 +88,28 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: appThemeMode,
-      builder: (_, mode, _) => MaterialApp(
-        title: 'Tumaini Investments',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          scaffoldBackgroundColor: const Color(0xFFF7F9FF),
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF143D9E),
-            primary: const Color(0xFF143D9E),
-            surface: Colors.white,
-          ),
+    return MaterialApp(
+      title: 'Tumaini Investments',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        scaffoldBackgroundColor: const Color(0xFFF7F9FF),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF143D9E),
+          primary: const Color(0xFF143D9E),
+          surface: Colors.white,
         ),
-        darkTheme: ThemeData.dark(useMaterial3: true).copyWith(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF143D9E),
-            primary: const Color(0xFF9DB8FF),
-            brightness: Brightness.dark,
-          ),
-        ),
-        themeMode: mode,
-        initialRoute: '/',
-        routes: {
-          // SplashScreen decides where to go on its own (session + role check)
-          '/': (context) => const SplashScreen(),
-          '/login': (context) => const LoginScreen(),
-          '/signup': (context) => const SignupScreen(),
-          '/forgot-password': (context) => const ForgotPasswordScreen(),
-          '/home': (context) => const EmployeeHomeRoute(),
-          '/admin-home': (context) => const AdminHomeRoute(),
-        },
       ),
+      themeMode: ThemeMode.light,
+      initialRoute: '/',
+      routes: {
+        // SplashScreen decides where to go on its own (session + role check)
+        '/': (context) => const SplashScreen(),
+        '/login': (context) => const LoginScreen(),
+        '/signup': (context) => const SignupScreen(),
+        '/forgot-password': (context) => const ForgotPasswordScreen(),
+        '/home': (context) => const EmployeeHomeRoute(),
+        '/admin-home': (context) => const AdminHomeRoute(),
+      },
     );
   }
 }

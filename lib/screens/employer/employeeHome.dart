@@ -4,28 +4,23 @@ import '../../appUser.dart';
 import '../../widgets/employeeShell.dart';
 import 'employeeHomeRepo.dart';
 import 'employeeUi.dart';
+import 'expenseScreen.dart';
 
 // ============================================================================
 // EMPLOYEE HOME — first screen for branch staff (cashier-first).
-//   Read-only apart from its shortcuts. Everything is live and limited to
-//   the user's own branch. Cashiers never see profit, buying prices,
-//   expenses, other branches or suppliers — those are simply not queried.
+//   Read-only apart from its shortcuts and expense recording. Everything
+//   is live and limited to the user's own branch. Cashiers never see
+//   profit, buying prices, other branches or suppliers — those are simply
+//   not queried. Branch expenses can be recorded here and viewed under
+//   the desktop Expenses tab.
 //
-//   Role variations: stock_controller gets Receive stock + big alerts +
+//   Role variations: stock_controller gets Receive stock +
 //   recent movements; manager gets the cashier layout + profit/expenses.
 //
 //   Lives inside EmployeeShell's IndexedStack, so the bottom nav (mobile)
 //   and side rail (desktop) stay visible — details open in sheets/dialogs.
 //   Numbers reload whenever Home is re-selected, plus pull-to-refresh.
 // ============================================================================
-
-/// Shared with the future Stock screen: Home sets this before jumping to
-/// the Stock tab so it can open pre-filtered ('low' | 'expiring' | null).
-class BranchStockFilter extends ValueNotifier<String?> {
-  BranchStockFilter() : super(null);
-}
-
-final branchStockFilter = BranchStockFilter();
 
 class EmployeeHomeScreen extends StatefulWidget {
   final AppUser user;
@@ -80,6 +75,10 @@ String _methodLabel(String m) {
   switch (m) {
     case 'cash':
       return 'Cash';
+    case 'airtel_money':
+      return 'Airtel Money';
+    case 'tnm_mpamba':
+      return 'TNM Mpamba';
     case 'mobile_money':
       return 'Mobile money';
     case 'card':
@@ -216,11 +215,6 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
       if (_lookupCtrl.text != q) return;
       setState(() => _lookupLoading = false);
     }
-  }
-
-  void _goToStock(String? filter) {
-    branchStockFilter.value = filter;
-    EmployeeShell.switchTo(context, 2);
   }
 
   Future<void> _openReceipt(RecentSale s) async {
@@ -411,17 +405,15 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
       branchName: widget.branchName,
       role: widget.user.role,
     );
-    final action = _MainAction(isStock: _isStock);
+    final action = _MainAction(
+      isStock: _isStock,
+      branchId: widget.user.branchId,
+      onExpenseSaved: () => _load(silent: true),
+    );
     final summary = _SummaryBlock(
       data: d,
       tablet: tablet,
       showManagerExtras: _isManager,
-    );
-    final alerts = _AlertsBlock(
-      data: d,
-      large: _isStock,
-      stacked: wide,
-      onTap: _goToStock,
     );
     final lookup = _LookupBlock(
       controller: _lookupCtrl,
@@ -457,7 +449,6 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
                     children: [
                       action,
                       const SizedBox(height: 14),
-                      if (_isStock) ...[alerts, const SizedBox(height: 14)],
                       summary,
                       const SizedBox(height: 14),
                       recent,
@@ -470,7 +461,6 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (!_isStock) ...[alerts, const SizedBox(height: 14)],
                       lookup,
                       const SizedBox(height: 14),
                       owing,
@@ -490,10 +480,8 @@ class _EmployeeHomeScreenState extends State<EmployeeHomeScreen> {
       const SizedBox(height: 16),
       action,
       const SizedBox(height: 14),
-      if (_isStock) ...[alerts, const SizedBox(height: 14)],
       summary,
       const SizedBox(height: 14),
-      if (!_isStock) ...[alerts, const SizedBox(height: 14)],
       lookup,
       const SizedBox(height: 14),
       recent,
@@ -569,20 +557,64 @@ class _Greeting extends StatelessWidget {
 
 class _MainAction extends StatelessWidget {
   final bool isStock;
-  const _MainAction({required this.isStock});
+  final String? branchId;
+  final VoidCallback onExpenseSaved;
+  const _MainAction({
+    required this.isStock,
+    required this.branchId,
+    required this.onExpenseSaved,
+  });
+
+  Future<void> _newExpense(BuildContext context) async {
+    final bid = branchId;
+    if (bid == null) {
+      empToast(context, 'No branch assigned to this account yet.', error: true);
+      return;
+    }
+    final saved = await showRecordExpenseSheet(context, branchId: bid);
+    if (saved == true && context.mounted) {
+      onExpenseSaved();
+      empToast(context, 'Expense recorded.');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 58,
-      child: FilledButton.icon(
-        onPressed: () => EmployeeShell.switchTo(context, isStock ? 2 : 1),
-        style: empPrimaryButton(height: 58),
-        icon: Icon(
-          isStock ? Icons.add_box_outlined : Icons.point_of_sale_outlined,
-          size: 22,
-        ),
-        label: Text(isStock ? 'Receive stock' : 'New sale'),
+      height: 54,
+      child: Row(
+        children: [
+          Expanded(
+            flex: 3,
+            child: FilledButton.icon(
+              onPressed: () =>
+                  EmployeeShell.switchTo(context, isStock ? 2 : 1),
+              style: empPrimaryButton(height: 54),
+              icon: Icon(
+                isStock ? Icons.add_box_outlined : Icons.point_of_sale_outlined,
+                size: 20,
+              ),
+              label: Text(isStock ? 'Receive stock' : 'New sale'),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            flex: 2,
+            child: OutlinedButton.icon(
+              onPressed: () => _newExpense(context),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: empPrimary,
+                minimumSize: const Size(0, 54),
+                side: const BorderSide(color: empBorder),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.add_card_outlined, size: 19),
+              label: const Text('New expense'),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -622,7 +654,10 @@ class _SummaryBlock extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _splitRow('Cash', data.cashTotal),
-          _splitRow('Mobile money', data.mobileTotal),
+          _splitRow('Airtel Money', data.airtelTotal),
+          _splitRow('TNM Mpamba', data.mpambaTotal),
+          if (data.mobileTotal > 0)
+            _splitRow('Mobile money (old)', data.mobileTotal),
           _splitRow('Credit', data.creditTotal),
           if (data.cardTotal > 0) _splitRow('Card', data.cardTotal),
         ],
@@ -741,132 +776,6 @@ class _StatCard extends StatelessWidget {
           ),
           Text(sub, style: empSans(10.5, color: empMuted)),
         ],
-      ),
-    );
-  }
-}
-
-// ============================================================================
-// STOCK ALERTS (view-only shortcuts into the Stock tab)
-// ============================================================================
-
-class _AlertsBlock extends StatelessWidget {
-  final EmployeeHomeBundle data;
-  final bool large;
-  final bool stacked;
-  final ValueChanged<String?> onTap;
-  const _AlertsBlock({
-    required this.data,
-    required this.large,
-    required this.stacked,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final low = _AlertCard(
-      count: data.lowCount,
-      title: 'Low stock',
-      sub: data.lowCount == 0 ? 'All stocked up' : 'Needs reorder',
-      icon: Icons.warning_amber_rounded,
-      fg: empWarn,
-      bg: empWarnTint,
-      large: large,
-      onTap: () => onTap('low'),
-    );
-    final exp = _AlertCard(
-      count: data.expiringCount,
-      title: 'Expiring soon',
-      sub: data.expiringCount == 0 ? 'Nothing at risk' : 'Sell these first',
-      icon: Icons.schedule_outlined,
-      fg: empDanger,
-      bg: empDangerTint,
-      large: large,
-      onTap: () => onTap('expiring'),
-    );
-    if (stacked) {
-      return Column(children: [low, const SizedBox(height: 10), exp]);
-    }
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: low),
-        const SizedBox(width: 10),
-        Expanded(child: exp),
-      ],
-    );
-  }
-}
-
-class _AlertCard extends StatelessWidget {
-  final int count;
-  final String title;
-  final String sub;
-  final IconData icon;
-  final Color fg;
-  final Color bg;
-  final bool large;
-  final VoidCallback onTap;
-  const _AlertCard({
-    required this.count,
-    required this.title,
-    required this.sub,
-    required this.icon,
-    required this.fg,
-    required this.bg,
-    required this.large,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: empSurface,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          padding: EdgeInsets.all(large ? 18 : 14),
-          decoration: BoxDecoration(
-            border: Border.all(color: empBorder),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: large ? 38 : 32,
-                    height: large ? 38 : 32,
-                    decoration: BoxDecoration(
-                      color: bg,
-                      borderRadius: BorderRadius.circular(9),
-                    ),
-                    child: Icon(icon, size: large ? 20 : 17, color: fg),
-                  ),
-                  const Spacer(),
-                  const Icon(Icons.chevron_right, size: 17, color: empMuted),
-                ],
-              ),
-              SizedBox(height: large ? 12 : 8),
-              Text(
-                '$count',
-                style: empSans(
-                  large ? 28 : 22,
-                  weight: FontWeight.w700,
-                  color: empInk,
-                ),
-              ),
-              Text(
-                title,
-                style: empSans(12, weight: FontWeight.w600, color: empMuted),
-              ),
-              Text(sub, style: empSans(10.5, color: empMuted)),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -1443,8 +1352,12 @@ class _PaymentSheetState extends State<_PaymentSheet> {
                       items: const [
                         DropdownMenuItem(value: 'cash', child: Text('Cash')),
                         DropdownMenuItem(
-                          value: 'mobile_money',
-                          child: Text('Mobile money'),
+                          value: 'airtel_money',
+                          child: Text('Airtel Money'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'tnm_mpamba',
+                          child: Text('TNM Mpamba'),
                         ),
                         DropdownMenuItem(value: 'card', child: Text('Card')),
                       ],

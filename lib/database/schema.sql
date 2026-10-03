@@ -39,7 +39,9 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto; -- gives us gen_random_uuid()
 
 CREATE TYPE user_role AS ENUM ('admin', 'manager', 'cashier', 'stock_controller');
 CREATE TYPE sale_type AS ENUM ('retail', 'wholesale');
-CREATE TYPE payment_method AS ENUM ('cash', 'mobile_money', 'card', 'credit');
+CREATE TYPE payment_method AS ENUM ('cash', 'mobile_money', 'card', 'credit', 'airtel_money', 'tnm_mpamba');
+-- 'mobile_money' is legacy (pre Airtel Money / TNM Mpamba split) and is kept
+-- so existing rows stay valid. New sales use 'airtel_money' or 'tnm_mpamba'.
 CREATE TYPE payment_status AS ENUM ('paid', 'partial', 'pending');
 
 CREATE TYPE stock_movement_type AS ENUM (
@@ -1171,8 +1173,9 @@ CREATE POLICY "Admins manage suppliers"
 CREATE INDEX IF NOT EXISTS idx_expenses_branch_date ON expenses(branch_id, expense_date);
 
 -- ----------------------------------------------------------------------------
--- 1. EXPENSES: admin sees all; managers see and record their own branch only.
---    (Cashiers and stock controllers never see expense figures.)
+-- 1. EXPENSES: admin sees all; branch staff see and record their own branch.
+--    Branch staff (cashier, stock controller, manager) see and record
+--    their own branch only.
 -- ----------------------------------------------------------------------------
 ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 
@@ -1930,3 +1933,47 @@ $$;
 
 REVOKE ALL ON FUNCTION update_own_profile(text, text) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION update_own_profile(text, text) TO authenticated;
+
+-- ----------------------------------------------------------------------------
+-- MIGRATION: Malawi mobile money split (run once on existing databases).
+-- Fresh installs already get the new values from the CREATE TYPE above.
+-- 'mobile_money' is kept so existing rows stay valid.
+-- ----------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON t.oid = e.enumtypid
+    WHERE t.typname = 'payment_method' AND e.enumlabel = 'airtel_money'
+  ) THEN
+    ALTER TYPE payment_method ADD VALUE 'airtel_money';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_enum e
+    JOIN pg_type t ON t.oid = e.enumtypid
+    WHERE t.typname = 'payment_method' AND e.enumlabel = 'tnm_mpamba'
+  ) THEN
+    ALTER TYPE payment_method ADD VALUE 'tnm_mpamba';
+  END IF;
+END
+$$;
+
+-- ----------------------------------------------------------------------------
+-- MIGRATION: let branch staff (cashier, stock controller, manager) record
+-- their own branch's expenses (run once on existing databases). Fresh
+-- installs are covered by the policies above plus this one.
+-- ----------------------------------------------------------------------------
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'expenses'
+      AND policyname = 'Staff record own branch expenses'
+  ) THEN
+    CREATE POLICY "Staff record own branch expenses"
+      ON expenses FOR INSERT
+      WITH CHECK (branch_id = user_branch_id());
+  END IF;
+END
+$$;

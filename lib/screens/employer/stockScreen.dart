@@ -2,15 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../appUser.dart';
 import '../../widgets/employeeShell.dart';
-import 'employeeHome.dart' show branchStockFilter;
 import 'employeeUi.dart';
 import 'stockRepo.dart';
 
 // ============================================================================
 // CASHIER STOCK — own-branch stock list + receiving deliveries.
 //   Receiving needs stock access (admin grant); without it the screen is
-//   read-only with a "Request access" path. Home's alert cards deep-link
-//   here pre-filtered via branchStockFilter. New stock appears on the sales
+//   read-only with a "Request access" path. New stock appears on the sales
 //   list immediately after receive_stock_delivery() commits.
 // ============================================================================
 
@@ -44,7 +42,6 @@ class _StockScreenState extends State<StockScreen> {
   @override
   void initState() {
     super.initState();
-    _consumeIncomingFilter();
     _load();
   }
 
@@ -54,22 +51,12 @@ class _StockScreenState extends State<StockScreen> {
     super.dispose();
   }
 
-  void _consumeIncomingFilter({bool notify = false}) {
-    final f = branchStockFilter.value;
-    branchStockFilter.value = null;
-    if (f == 'low' || f == 'expiring') {
-      _chip = f!;
-      if (notify && mounted) setState(() {});
-    }
-  }
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final selected = EmployeeShellScope.of(context)?.selectedIndex == 2;
     if (selected && !_wasSelected) {
       if (_loadedOnce) {
-        _consumeIncomingFilter(notify: true);
         _load(silent: true);
       }
     }

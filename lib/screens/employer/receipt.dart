@@ -10,6 +10,23 @@ class ReceiptService {
   static final _dateFmt = DateFormat('dd MMM yyyy, HH:mm');
   static String _mk(num v) => 'MK ${_money.format(v)}';
 
+  static String _methodLabel(String m) {
+    switch (m) {
+      case 'airtel_money':
+        return 'Airtel Money';
+      case 'tnm_mpamba':
+        return 'TNM Mpamba';
+      case 'mobile_money':
+        return 'Mobile money';
+      case 'card':
+        return 'Card';
+      case 'credit':
+        return 'Credit';
+      default:
+        return 'Cash';
+    }
+  }
+
   /// Sale dates come back from get_receipt/create_sale already converted to
   /// Malawi wall time (AT TIME ZONE 'Africa/Blantyre'), so display as-is —
   /// never shift again, or devices outside Malawi would double-shift.
@@ -64,7 +81,7 @@ class ReceiptService {
           ],
           divider,
           line('TOTAL', _mk(r['total_amount']), bold: true),
-          line('Paid (${(r['payment_method'] as String).replaceAll('_', ' ')})', _mk(r['amount_paid'])),
+          line('Paid (${_methodLabel(r['payment_method'] as String? ?? '')})', _mk(r['amount_paid'])),
           if (balanceDue > 0) line('Balance owing', _mk(balanceDue), bold: true),
           if (cashReceived != null) line('Cash received', _mk(cashReceived)),
           if (change != null && change > 0) line('Change', _mk(change)),

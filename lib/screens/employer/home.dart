@@ -5,6 +5,7 @@ import '../../appUser.dart';
 import '../../auth-repository.dart';
 import '../../widgets/employeeShell.dart';
 import 'employeeHome.dart';
+import 'expenseScreen.dart';
 import 'saleScreen.dart';
 import 'settingsScreen.dart';
 import 'stockScreen.dart';
@@ -94,6 +95,9 @@ class _EmployeeHomeRouteState extends State<EmployeeHomeRoute> {
               branchName: data.branchName,
               branchPhone: data.branchPhone,
             ),
+            // Desktop-only tab (side rail, below Stock). Mobile has no tab
+            // for this — staff record from the Home "New expense" button.
+            ExpenseScreen(user: data.user, branchName: data.branchName),
           ],
         );
       },

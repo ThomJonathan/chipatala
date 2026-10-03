@@ -61,7 +61,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _paper = 'roll80';
   bool _autoPrint = false;
   String _saleType = 'retail';
-  String _appearance = 'system';
 
   @override
   void initState() {
@@ -96,13 +95,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final paper = await EmpPrefs.paperSize();
     final auto = await EmpPrefs.autoPrint();
     final type = await EmpPrefs.defaultSaleType();
-    final theme = await EmpPrefs.appearance();
     if (!mounted) return;
     setState(() {
       _paper = paper;
       _autoPrint = auto;
       _saleType = type;
-      _appearance = theme;
     });
   }
 
@@ -310,8 +307,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       _receiptsCard(),
                       const SizedBox(height: 12),
                       _saleDefaultsCard(),
-                      const SizedBox(height: 12),
-                      _appearanceCard(),
                       const SizedBox(height: 12),
                       _aboutCard(),
                       const SizedBox(height: 16),
@@ -583,34 +578,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Text(
             'You can still change it on each sale.',
             style: empSans(12, color: empMuted),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _appearanceCard() {
-    return EmpCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _cardTitle('Appearance'),
-          Wrap(
-            spacing: 8,
-            children: [
-              _optionChip('Light', 'light', _appearance, (v) async {
-                setState(() => _appearance = v);
-                await EmpPrefs.setAppearance(v);
-              }),
-              _optionChip('Dark', 'dark', _appearance, (v) async {
-                setState(() => _appearance = v);
-                await EmpPrefs.setAppearance(v);
-              }),
-              _optionChip('Follow device', 'system', _appearance, (v) async {
-                setState(() => _appearance = v);
-                await EmpPrefs.setAppearance(v);
-              }),
-            ],
           ),
         ],
       ),

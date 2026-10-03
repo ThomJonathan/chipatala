@@ -15,26 +15,6 @@ class EmployeeHomeException implements Exception {
   String toString() => message;
 }
 
-class LowItem {
-  final String itemName;
-  final double qtyOnHand;
-  final double reorderLevel;
-  const LowItem({required this.itemName, required this.qtyOnHand, required this.reorderLevel});
-}
-
-class ExpiringItem {
-  final String itemName;
-  final String expiryDate;
-  final int daysToExpiry;
-  final double qty;
-  const ExpiringItem({
-    required this.itemName,
-    required this.expiryDate,
-    required this.daysToExpiry,
-    required this.qty,
-  });
-}
-
 class RecentSale {
   final String id;
   final String time; // ISO sale_date
@@ -129,13 +109,13 @@ class EmployeeHomeBundle {
   final int salesCount;
   final double salesTotal;
   final double cashTotal;
+  final double airtelTotal;
+  final double mpambaTotal;
+  /// Legacy bucket for sales recorded as 'mobile_money' before the
+  /// Airtel Money / TNM Mpamba split. Shown only when above zero.
   final double mobileTotal;
   final double creditTotal;
   final double cardTotal;
-  final List<LowItem> lowTop;
-  final int lowCount;
-  final List<ExpiringItem> expiringTop;
-  final int expiringCount;
   final List<RecentSale> recentSales;
   final int owingCount;
   final double owingTotal;
@@ -149,13 +129,11 @@ class EmployeeHomeBundle {
     required this.salesCount,
     required this.salesTotal,
     required this.cashTotal,
+    required this.airtelTotal,
+    required this.mpambaTotal,
     required this.mobileTotal,
     required this.creditTotal,
     required this.cardTotal,
-    required this.lowTop,
-    required this.lowCount,
-    required this.expiringTop,
-    required this.expiringCount,
     required this.recentSales,
     required this.owingCount,
     required this.owingTotal,
@@ -195,13 +173,17 @@ class EmployeeHomeRepository {
         .order('sale_date', ascending: false)
         .limit(500) as List;
 
-    var total = 0.0, cash = 0.0, mobile = 0.0, credit = 0.0, card = 0.0;
+    var total = 0.0, cash = 0.0, airtel = 0.0, mpamba = 0.0, mobile = 0.0, credit = 0.0, card = 0.0;
     for (final r in salesRows) {
       final amt = ((r['total_amount'] as num?) ?? 0).toDouble();
       total += amt;
       switch (r['payment_method'] as String?) {
         case 'cash':
           cash += amt;
+        case 'airtel_money':
+          airtel += amt;
+        case 'tnm_mpamba':
+          mpamba += amt;
         case 'mobile_money':
           mobile += amt;
         case 'credit':
@@ -236,40 +218,6 @@ class EmployeeHomeRepository {
         itemCount: counts[id] ?? 0,
       );
     }).toList();
-
-    // ---- Low stock at this branch ---------------------------------------------
-    final lowRows = await client
-        .from('v_low_stock')
-        .select('item_name, reorder_level, quantity_on_hand')
-        .eq('branch_id', branchId)
-        .limit(200) as List;
-    final lowItems = lowRows
-        .map((r) => LowItem(
-              itemName: r['item_name'] as String,
-              qtyOnHand: ((r['quantity_on_hand'] as num?) ?? 0).toDouble(),
-              reorderLevel: ((r['reorder_level'] as num?) ?? 0).toDouble(),
-            ))
-        .toList();
-    lowItems.sort((a, b) {
-      double sev(LowItem x) => x.reorderLevel <= 0 ? 0 : (x.qtyOnHand / x.reorderLevel).clamp(0.0, 1.0);
-      return sev(a).compareTo(sev(b));
-    });
-
-    // ---- Expiring soon at this branch ------------------------------------------
-    final expRows = await client
-        .from('v_expiring_soon')
-        .select('item_name, expiry_date, days_to_expiry, quantity_available')
-        .eq('branch_id', branchId)
-        .limit(200) as List;
-    final expItems = expRows
-        .map((r) => ExpiringItem(
-              itemName: r['item_name'] as String,
-              expiryDate: (r['expiry_date'] as String?) ?? '',
-              daysToExpiry: ((r['days_to_expiry'] as num?) ?? 999).toInt(),
-              qty: ((r['quantity_available'] as num?) ?? 0).toDouble(),
-            ))
-        .toList();
-    expItems.sort((a, b) => a.daysToExpiry.compareTo(b.daysToExpiry));
 
     // ---- Customers owing at this branch -----------------------------------------
     final debtRows = await client
@@ -333,13 +281,11 @@ class EmployeeHomeRepository {
       salesCount: salesRows.length,
       salesTotal: total,
       cashTotal: cash,
+      airtelTotal: airtel,
+      mpambaTotal: mpamba,
       mobileTotal: mobile,
       creditTotal: credit,
       cardTotal: card,
-      lowTop: lowItems.take(3).toList(),
-      lowCount: lowItems.length,
-      expiringTop: expItems.take(3).toList(),
-      expiringCount: expItems.length,
       recentSales: recentSales,
       owingCount: debtRows.length,
       owingTotal: owingTotal,

@@ -413,8 +413,12 @@ class _EmployeeReportsScreenState extends State<EmployeeReportsScreen> {
                 items: const [
                   DropdownMenuItem(value: 'cash', child: Text('Cash')),
                   DropdownMenuItem(
-                    value: 'mobile_money',
-                    child: Text('Mobile money'),
+                    value: 'airtel_money',
+                    child: Text('Airtel Money'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'tnm_mpamba',
+                    child: Text('TNM Mpamba'),
                   ),
                   DropdownMenuItem(value: 'card', child: Text('Card')),
                 ],

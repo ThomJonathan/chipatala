@@ -5,6 +5,27 @@ class EmployeeReportException implements Exception {
   const EmployeeReportException(this.message);
 }
 
+/// Display label for a stored payment_method value. 'mobile_money' is the
+/// legacy value from before the Airtel Money / TNM Mpamba split.
+String paymentMethodLabel(String m) {
+  switch (m) {
+    case 'cash':
+      return 'Cash';
+    case 'airtel_money':
+      return 'Airtel Money';
+    case 'tnm_mpamba':
+      return 'TNM Mpamba';
+    case 'mobile_money':
+      return 'Mobile money';
+    case 'card':
+      return 'Card';
+    case 'credit':
+      return 'Credit';
+    default:
+      return m.isEmpty ? '—' : m;
+  }
+}
+
 class EmployeeReportPeriod {
   final DateTime start;
   final DateTime end;
@@ -154,7 +175,7 @@ class EmployeeReportsRepository {
             ? (cashier['full_name'] as String? ?? '—')
             : '—',
         total: ((r['total_amount'] as num?) ?? 0).toDouble(),
-        method: (r['payment_method'] as String? ?? '').replaceAll('_', ' '),
+        method: paymentMethodLabel((r['payment_method'] as String?) ?? ''),
       );
     }).toList();
     final sellers =
@@ -202,7 +223,7 @@ class EmployeeReportsRepository {
         .map(
           (r) => EmployeePayment(
             date: r['payment_date'] as String? ?? '',
-            method: (r['payment_method'] as String? ?? '').replaceAll('_', ' '),
+            method: paymentMethodLabel((r['payment_method'] as String?) ?? ''),
             amount: ((r['amount'] as num?) ?? 0).toDouble(),
           ),
         )

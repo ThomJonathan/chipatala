@@ -7,8 +7,11 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 //
 // This is just the responsive navigation: a floating bottom nav bar on
 // phone widths, a fixed side rail on desktop widths. It owns none of the
-// screen content — you pass in your five real screens and this just
-// decides which one is visible and draws the nav around it.
+// screen content — you pass in your real screens (Home, Sale, Stock,
+// Reports, Settings, plus an optional sixth Expenses page) and this just
+// decides which one is visible and draws the nav around it. The Expenses
+// page is desktop-only: the side rail shows it below Stock, while mobile
+// keeps the five-tab bottom nav.
 //
 // The currently signed-in user is shown on both: a slim top bar above the
 // content on phone widths, and a user card at the bottom of the side rail
@@ -65,7 +68,9 @@ class _NavDestination {
 }
 
 // Home, Sale, Stock, Reports, Settings — in this order. Whatever you pass
-// into EmployeeShell.pages must be in this same order.
+// into EmployeeShell.pages must be in this same order. An optional sixth
+// page (Expenses) may be appended at the end: it appears in the desktop
+// side rail below Stock, and is hidden on mobile (no bottom-nav tab).
 const List<_NavDestination> _kDestinations = [
   _NavDestination(
     icon: Icons.home_outlined,
@@ -93,6 +98,22 @@ const List<_NavDestination> _kDestinations = [
     label: 'Settings',
   ),
 ];
+
+/// Desktop-only entry. Its page (when given) is pages[5].
+const _NavDestination _kExpensesDestination = _NavDestination(
+  icon: Icons.receipt_long_outlined,
+  activeIcon: Icons.receipt_long,
+  label: 'Expenses',
+);
+
+/// Visual order of the desktop side rail as page indices. Expenses (5)
+/// sits below Stock even though its page is appended last, so the mobile
+/// indices 0-4 never shift.
+List<int> _desktopPageOrder(int pageCount) =>
+    pageCount > 5 ? const [0, 1, 2, 5, 3, 4] : const [0, 1, 2, 3, 4];
+
+_NavDestination _destinationForPage(int pageIndex) =>
+    pageIndex == 5 ? _kExpensesDestination : _kDestinations[pageIndex];
 
 /// Confirms with the user, then signs out. If [onSignOut] is given, that
 /// runs instead of the default (use this if sign-out needs to go through
@@ -151,8 +172,10 @@ class EmployeeShellScope extends InheritedWidget {
 }
 
 class EmployeeShell extends StatefulWidget {
-  /// Your five real screens, in the same order as _kDestinations above
-  /// (Home, Sale, Stock, Reports, Settings).
+  /// Your real screens: Home, Sale, Stock, Reports, Settings, in the same
+  /// order as _kDestinations. An optional sixth page (Expenses) may be
+  /// appended — desktop shows it in the side rail below Stock, mobile
+  /// hides it (record from Home instead).
   final List<Widget> pages;
 
   final String userName;
@@ -168,9 +191,10 @@ class EmployeeShell extends StatefulWidget {
     this.branchName = '',
     this.onSignOut,
   }) : assert(
-         pages.length == _kDestinations.length,
-         'EmployeeShell.pages must have exactly ${_kDestinations.length} entries '
-         '(Home, Sale, Stock, Reports, Settings) — got ${pages.length}.',
+         pages.length == _kDestinations.length ||
+             pages.length == _kDestinations.length + 1,
+         'EmployeeShell.pages must have 5 entries '
+         '(Home, Sale, Stock, Reports, Settings) or 6 with Expenses appended — got ${pages.length}.',
        );
 
   static void switchTo(BuildContext context, int index) {
@@ -207,6 +231,7 @@ class _EmployeeShellState extends State<EmployeeShell> {
                   _SideNav(
                     selectedIndex: _index,
                     onSelect: _onSelect,
+                    pageCount: widget.pages.length,
                     userName: widget.userName,
                     userRole: widget.userRole,
                     branchName: widget.branchName,
@@ -411,6 +436,7 @@ class _MobileTopBar extends StatelessWidget {
 class _SideNav extends StatelessWidget {
   final int selectedIndex;
   final ValueChanged<int> onSelect;
+  final int pageCount;
   final String userName;
   final String userRole;
   final String branchName;
@@ -419,6 +445,7 @@ class _SideNav extends StatelessWidget {
   const _SideNav({
     required this.selectedIndex,
     required this.onSelect,
+    required this.pageCount,
     required this.userName,
     required this.userRole,
     required this.branchName,
@@ -454,47 +481,52 @@ class _SideNav extends StatelessWidget {
               ),
             ),
           ),
-          ...List.generate(_kDestinations.length, (i) {
-            final d = _kDestinations[i];
-            final active = i == selectedIndex;
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: Material(
-                color: active ? primary : Colors.transparent,
-                borderRadius: BorderRadius.circular(7),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(7),
-                  onTap: () => onSelect(i),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 9,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          active ? d.activeIcon : d.icon,
-                          size: 17,
-                          color: active ? Colors.white : _kInkMuted,
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          d.label,
-                          style: GoogleFonts.ibmPlexSans(
-                            fontSize: 13.5,
-                            fontWeight: active
-                                ? FontWeight.w600
-                                : FontWeight.w500,
-                            color: active ? Colors.white : _kInkMuted,
+          ...[
+            for (final pageIndex in _desktopPageOrder(pageCount))
+              Builder(
+                builder: (context) {
+                  final d = _destinationForPage(pageIndex);
+                  final active = pageIndex == selectedIndex;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Material(
+                      color: active ? primary : Colors.transparent,
+                      borderRadius: BorderRadius.circular(7),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(7),
+                        onTap: () => onSelect(pageIndex),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 9,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                active ? d.activeIcon : d.icon,
+                                size: 17,
+                                color: active ? Colors.white : _kInkMuted,
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                d.label,
+                                style: GoogleFonts.ibmPlexSans(
+                                  fontSize: 13.5,
+                                  fontWeight: active
+                                      ? FontWeight.w600
+                                      : FontWeight.w500,
+                                  color: active ? Colors.white : _kInkMuted,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
-            );
-          }),
+          ],
           const Spacer(),
           Container(
             decoration: const BoxDecoration(

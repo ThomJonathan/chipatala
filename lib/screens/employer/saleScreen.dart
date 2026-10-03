@@ -61,7 +61,7 @@ class _SaleScreenState extends State<SaleScreen> {
   final Map<String, _Line> _cart = {};
   String _saleType = 'retail'; // retail | wholesale
   SaleCustomer? _customer;
-  String _method = 'cash'; // cash | mobile_money | card | credit
+  String _method = 'cash'; // cash | airtel_money | tnm_mpamba | card | credit
   String _partMethod = 'cash';
 
   bool _processing = false;
@@ -1496,7 +1496,8 @@ class _PaymentBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     const methods = [
       ('cash', 'Cash', Icons.payments_outlined),
-      ('mobile_money', 'MoMo', Icons.smartphone_outlined),
+      ('airtel_money', 'Airtel Money', Icons.smartphone_outlined),
+      ('tnm_mpamba', 'TNM Mpamba', Icons.smartphone_outlined),
       ('card', 'Card', Icons.credit_card_outlined),
       ('credit', 'Credit', Icons.book_outlined),
     ];
@@ -1572,7 +1573,8 @@ class _PaymentBlock extends StatelessWidget {
             children: [
               for (final (v, label) in [
                 ('cash', 'Cash'),
-                ('mobile_money', 'MoMo'),
+                ('airtel_money', 'Airtel Money'),
+                ('tnm_mpamba', 'TNM Mpamba'),
                 ('card', 'Card'),
               ])
                 ChoiceChip(
@@ -1697,8 +1699,12 @@ class _HistoryBlock extends StatelessWidget {
 
   String _methodName(String m) {
     switch (m) {
+      case 'airtel_money':
+        return 'Airtel Money';
+      case 'tnm_mpamba':
+        return 'TNM Mpamba';
       case 'mobile_money':
-        return 'MoMo';
+        return 'Mobile money';
       case 'credit':
         return 'Credit';
       case 'card':
@@ -1837,6 +1843,14 @@ class _ReceiptSheetState extends State<_ReceiptSheet> {
     final paid = ((r['amount_paid'] as num?) ?? 0).toDouble();
     final due = ((r['balance_due'] as num?) ?? 0).toDouble();
     final method = (r['payment_method'] as String?) ?? '';
+    final methodLabel = switch (method) {
+      'airtel_money' => 'Airtel Money',
+      'tnm_mpamba' => 'TNM Mpamba',
+      'mobile_money' => 'Mobile money',
+      'credit' => 'Credit',
+      'card' => 'Card',
+      _ => 'Cash',
+    };
     final body = Padding(
       padding: EdgeInsets.fromLTRB(
         24,
@@ -1947,7 +1961,7 @@ class _ReceiptSheetState extends State<_ReceiptSheet> {
                   children: [
                     Expanded(
                       child: Text(
-                        'Paid ($method)',
+                        'Paid ($methodLabel)',
                         style: empSans(12.5, color: empMuted),
                       ),
                     ),

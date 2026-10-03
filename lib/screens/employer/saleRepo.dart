@@ -180,7 +180,7 @@ class SaleRepository {
     required String branchId,
     required List<Map<String, dynamic>> lines, // [{item_id, quantity}]
     required String saleType, // retail | wholesale
-    required String method, // cash | mobile_money | card | credit
+    required String method, // cash | airtel_money | tnm_mpamba | card | credit
     String? customerId,
     double? partPayment,
     String? partMethod,
