@@ -1,4 +1,4 @@
-package com.example.chipatala
+package com.tumaini.investments
 
 import io.flutter.embedding.android.FlutterActivity
 

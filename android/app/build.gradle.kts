@@ -14,7 +14,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.example.chipatala"
+    namespace = "com.tumaini.investments"
     compileSdk = flutter.compileSdkVersion
     // ndkVersion = flutter.ndkVersion  // disabled: not needed, was causing build failures
 
@@ -24,7 +24,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.chipatala"
+        applicationId = "com.tumaini.investments"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -42,8 +42,12 @@ android {
 
     buildTypes {
         release {
+            // Fail loudly on CI when release signing isn't configured, so a
+            // broken secret can't silently produce a debug-signed APK.
             signingConfig = if (keystorePropertiesFile.exists())
                 signingConfigs.getByName("release")
+            else if (System.getenv("CI") == "true")
+                throw GradleException("key.properties missing: release signing is not configured")
             else signingConfigs.getByName("debug")
         }
     }
